@@ -1,0 +1,85 @@
+{
+	"files.exclude": {
+		"**/.git": true,
+		"**/.claude": true,
+		"**/.granite": true,
+		"**/.DS_Store": true,
+		"**/CLAUDE.md": true,
+		"**/Library": true,
+		"**/Temp": true,
+		"**/Logs": true,
+		"**/UserSettings": true,
+		"**/obj": true,
+		"**/Build": true,
+		"**/Builds": true,
+		"**/*.csproj": true,
+		"**/*.sln": true,
+		"**/*.pidb": true,
+		"**/*.suo": true,
+		"**/*.user": true,
+		"**/*.userprefs": true,
+		"**/*.unityproj": true,
+		"**/*.booproj": true,
+		"**/*.svd": true,
+		"**/*.pdb": true,
+		"**/*.mdb": true,
+		"**/*.opendb": true,
+		"**/*.VC.db": true,
+	},
+
+	"search.exclude": {
+		"**/Library": true,
+		"**/Temp": true,
+		"**/Logs": true,
+		"**/obj": true,
+		"**/Build": true,
+		"**/Builds": true,
+		"**/*.code-search": true,
+		"**/*.csproj": true,
+		"**/*.sln": true,
+		"**/*.meta": true,
+	},
+
+	"files.watcherExclude": {
+		"**/.git/objects/**": true,
+		"**/.git/subtree-cache/**": true,
+		"**/Library/**": true,
+		"**/Temp/**": true,
+		"**/Logs/**": true,
+		"**/obj/**": true,
+		"**/Build/**": true,
+		"**/Builds/**": true,
+	},
+
+	"files.associations": {
+		"*.asset": "yaml",
+		"*.meta": "yaml",
+		"*.prefab": "yaml",
+		"*.unity": "yaml",
+		"*.mat": "yaml",
+		"*.anim": "yaml",
+		"*.controller": "yaml",
+		"*.physicMaterial": "yaml",
+		"*.physicsMaterial2D": "yaml",
+	},
+
+	"editor.insertSpaces": true,
+	"editor.tabSize": 4,
+
+	"omnisharp.useModernNet": true,
+	"dotnet.defaultSolution": "Assembly-CSharp.sln",
+
+	"terminal.integrated.showExitAlert": false,
+	"terminal.integrated.defaultProfile.windows": "Command Prompt",
+	"terminal.integrated.profiles.windows": {
+		"Command Prompt": {
+			"path": [
+				"${env:windir}\\System32\\cmd.exe",
+				"${env:windir}\\SysWOW64\\cmd.exe"
+			]
+		}
+	},
+
+	"terminal.integrated.defaultProfile.linux": "bash",
+	"terminal.integrated.defaultProfile.osx": "bash"
+}
