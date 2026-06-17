@@ -93,6 +93,21 @@ UI
 - `ShipCameraController : MonoBehaviour` (`Assets/Scripts/ShipCameraController.cs`) — 카메라 줌(휠/핀치).
 - 모듈 종류/스탯/진화 규칙은 추후 정의(현재는 단일 종류).
 
+메타/UI 시스템:
+- `PlayerState : MonoBehaviour` (`Assets/Scripts/PlayerState.cs`) — 레벨/경험치/활동력(`m_Activity`/`m_MaxActivity`)/재화 보관. `Changed` 이벤트로 HUD 갱신 통지. `Game` 오브젝트에 부착.
+- `MainUi : MonoBehaviour` (`Assets/Scripts/MainUi.cs`) — 하단 탭 전환 + 상단 HUD. `Game` 오브젝트에 부착.
+  - 씬 UI를 이름으로 탐색: `UI/Canvas/TopHud/{LevelText,ActivityText,CurrencyText}`, `UI/Canvas/Screens/Screen_{이름}`, `UI/Canvas/BottomNavigation/NavButton_{이름}`.
+  - `SelectScreen(index)`: 해당 화면만 활성, 탭 강조, `개조`일 때만 월드 `Ship` 활성.
+
+모듈/경제 시스템:
+- `ModuleType`(enum): `Weapon`(무기) / `Armor`(장갑) / `Engine`(추진체).
+- `ModuleDefinition` + `ModuleCatalog`(`Assets/Scripts/ModuleCatalog.cs`) — 종류별 이름/가격/스탯(공격/체력/이동/사거리)/색상 정의.
+  - 무기: 가격100, 공격+10, 체력10, 사거리4. / 장갑: 가격80, 체력+40. / 추진체: 가격120, 이동+5, 체력10.
+- `PlayerState` 인벤토리: `m_Inventory`(Dictionary<ModuleType,int>), `GetModuleCount`/`AddModule`/`TryRemoveModule`/`TrySpendCurrency`.
+- `ShopController`(`Assets/Scripts/ShopController.cs`) — 상점 화면에 모듈 행(이름/스탯/가격/구매) 구성, 구매 시 재화 소비→인벤토리 추가. `Game`에 부착.
+- `InventoryView`(`Assets/Scripts/InventoryView.cs`) — 개조 화면 하단 바에 보유 수량 표시. `Game`에 부착.
+- `UiFactory`(`Assets/Scripts/UiFactory.cs`) — uGUI Image/Text 생성 헬퍼.
+
 ## 6. 진행 로그
 
 - 2026-06-17
@@ -107,14 +122,41 @@ UI
   - 회전 옵션화(`m_AutoSpin` 기본 off), 카메라 줌(`ShipCameraController`, 휠/핀치) 추가.
   - 함선 전체 50% 축소(`Ship` scale 0.5).
   - 하단 네비게이션(개조[현재]/상점/전투/설정) uGUI 추가.
+  - 탭 전환(개조/상점/전투/설정) + 상단 HUD(레벨/활동력/재화) 구현. `PlayerState`/`MainUi` 추가.
+    - 상점/전투/설정은 현재 "준비 중" 플레이스홀더 패널. 플레이 모드에서 전환 동작 확인.
+  - Phase 2: 모듈 데이터(`ModuleType`/`ModuleCatalog`) + 상점 구매(`ShopController`) → 인벤토리 축적/표시(`InventoryView`/`UiFactory`). 컴파일 확인(직접 실행로 검증).
+  - 전투 상세 설계 확정(자동 전투 연출: 적 추진체 접근→무기 빔→피격 모듈 파괴→연결 끊긴 모듈 드리프트). 문서 7항에 기록.
 
-## 7. 다음 단계 (TODO)
+## 7. 게임 루프 로드맵 (목표 설계)
+
+사용자 의도에 따른 전체 흐름. 단계별로 구현한다.
+
+1. **상점(상점 탭)**: 물건(모듈)을 재화로 구매 → **개조 탭의 인벤토리**에 모듈이 축적된다.
+2. **개조(개조 탭)**: 인벤토리의 모듈을 **드래그**해서 함선의 빈 칸(슬롯)에 부착한다. (현재는 슬롯 탭=즉시 부착 / 추후 드래그-부착으로 확장)
+3. **전투 목록(전투 탭)**: **스크롤뷰**로 대결 가능한 다른 우주선 목록 표시. "대결하기"를 누르면 **활동력 소모** → 전투 화면으로 전환.
+4. **전투**: 자동 전투 연출. 결과 — 승리=**경험치+재화** 획득 / 패배=무보상. (전투당 활동력 **10** 소모, 자동 회복 없음)
+
+### 전투 상세 설계 (자동 전투 연출)
+- 시점: 전투 화면. **플레이어 함선은 제자리에서 둥둥 떠다니고**, 적 함선이 다가온다.
+- 함선 구조: **코어 모듈**에 장갑/추진체/무기 모듈이 부착되고, 그 위에 또 부착되는 식으로 트리처럼 확장된다.
+- 적 행동:
+  1. 적은 **추진체 모듈**의 추력으로 플레이어에게 다가온다.
+  2. **사거리** 안에 들어오면 **무기 모듈**에서 사거리가 고정된 **빔**을 발사한다.
+  3. 빔에 적중된 모듈은 **파괴**된다.
+  4. 중간 모듈이 파괴되어 **코어와의 연결이 끊긴 모듈**들은 부착이 풀리고 **흘러서(드리프트) 사라진다**. (조립의 `PruneDisconnected` 규칙과 동일 개념)
+- 양측 모두 무기/추진체/장갑 모듈로 위 규칙을 따른다(상호 교전). 승패는 코어 파괴 등으로 결정(세부 규칙은 Phase 5에서 확정).
+- 스탯 매핑: 무기→공격/사거리, 추진체→이동, 장갑→체력. (`ModuleCatalog` 값 사용)
+
+## 8. 다음 단계 (TODO)
 
 - [x] 탑뷰 2.5D 월드 공간 함선 화면 구성.
 - [x] 모듈 부착/탈착 인터랙션 로직 구현(슬롯 탭→부착, 모듈 탭→탈착, 연결성 prune).
 - [x] 자동 회전 옵션화 / 카메라 줌 / 전체 50% 축소 / 하단 네비게이션.
-- [ ] 하단 네비게이션 탭별 화면(개조/상점/전투/설정) 실제 전환 연결.
-- [ ] 모듈 종류/스탯/진화 규칙 정의.
+- [x] 탭 전환(개조/상점/전투/설정) + 상단 HUD(레벨/활동력/재화).
+- [x] 모듈 데이터(무기/장갑/추진체) + 상점 구매 → 인벤토리 축적·표시.
+- [ ] 개조: 인벤토리 모듈 드래그→슬롯 부착(모듈 종류별 스탯/색 반영, 인벤토리 소모).
+- [ ] 전투 목록: 스크롤뷰 상대 목록 + 대결하기(활동력 소모) → 전투 화면.
+- [ ] 전투: 결과 처리(승리=경험치+재화, 패배=무보상). 레벨업 곡선 정의.
+- [ ] 모듈 종류/스탯/가격/전투력 규칙 정의.
 - [ ] 함선 본체 시각 개선(별/우주 배경, 모듈 외형, 엔진 분사 등).
-- [ ] 게임뷰 해상도를 세로(예: 1080x1920)로 고정해 실제 비율 확인.
 - [ ] `GameManager.Awake()`의 `Resources.Load("Units/PlayerCharacter")` 경로 오류 정리(현재 런타임 예외).
