@@ -7,7 +7,7 @@ using UnityEngine;
 /// <summary>
 /// 게임 매니저.
 /// </summary>
-public class GameManager : SharedComponent2<GameManager>
+public class GameManager : SharedComponent<GameManager>
 {
 	#region INSPECTOR
 	[SerializeField] private RectTransform m_HUDRectTransform;

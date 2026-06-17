@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 공유 컴포넌트.
 /// </summary>
-public class SharedComponent2<TComponent> : MonoBehaviour where TComponent : Component
+public class SharedComponent<TComponent> : MonoBehaviour where TComponent : Component
 {
 	/// <summary>
 	/// 공유 인스턴스.
