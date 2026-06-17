@@ -1,20 +1,26 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 
 /// <summary>
-/// 함선 조립기. 코어 모듈을 중심으로 상하좌우에 정사각형 모듈을 부착/탈착한다.
+/// 함선 조립기. 탑뷰 2.5D 월드 공간에서 코어 모듈을 중심으로 상하좌우에
+/// 정사각형 모듈 블록을 동적으로 부착/탈착한다. 함선은 둥둥 떠다닌다.
 /// 빈 슬롯을 탭하면 모듈이 부착되고, 모듈을 탭하면 탈착된다.
 /// </summary>
 public class ShipBuilder : MonoBehaviour
 {
 	#region INSPECTOR
-	[SerializeField] private RectTransform m_ShipRoot;
-	[SerializeField] private float m_CellSize = 240f;
+	[SerializeField] private float m_CellSize = 1f;
+	[SerializeField] private float m_ModuleHeight = 0.4f;
+	[SerializeField] private float m_SlotHeight = 0.08f;
+	[SerializeField] private float m_BobAmplitude = 0.15f;
+	[SerializeField] private float m_BobSpeed = 1.2f;
+	[SerializeField] private bool m_AutoSpin = false;
+	[SerializeField] private float m_SpinSpeed = 6f;
 	[SerializeField] private Color m_CoreColor = new Color(0.2f, 0.8f, 0.8f, 1f);
 	[SerializeField] private Color m_ModuleColor = new Color(0.45f, 0.65f, 0.9f, 1f);
-	[SerializeField] private Color m_SlotColor = new Color(1f, 1f, 1f, 0.12f);
+	[SerializeField] private Color m_SlotColor = new Color(0.5f, 0.5f, 0.55f, 1f);
 	#endregion
 
 	/// <summary>
@@ -34,21 +40,103 @@ public class ShipBuilder : MonoBehaviour
 	private static readonly Vector2Int s_CoreCell = new Vector2Int(0, 0);
 
 	/// <summary>
+	/// 칸 오브젝트가 가리키는 격자 좌표와 슬롯 여부.
+	/// </summary>
+	private struct CellReference
+	{
+		public Vector2Int Coordinate;
+		public bool IsSlot;
+	}
+
+	/// <summary>
 	/// 부착된 모듈의 격자 좌표 집합(코어 제외).
 	/// </summary>
 	private readonly HashSet<Vector2Int> m_ModuleCells = new HashSet<Vector2Int>();
+
+	/// <summary>
+	/// 생성된 칸 오브젝트별 참조 정보.
+	/// </summary>
+	private readonly Dictionary<GameObject, CellReference> m_CellByObject = new Dictionary<GameObject, CellReference>();
+
+	/// <summary>
+	/// 부유 모션의 기준 위치.
+	/// </summary>
+	private Vector3 m_BasePosition;
+
+	/// <summary>
+	/// 클릭 판정에 사용할 카메라.
+	/// </summary>
+	private Camera m_Camera;
 
 	/// <summary>
 	/// 초기화됨.
 	/// </summary>
 	private void Start()
 	{
-		if (m_ShipRoot == null)
+		m_BasePosition = transform.localPosition;
+		m_Camera = Camera.main;
+		Rebuild();
+	}
+
+	/// <summary>
+	/// 매 프레임 갱신. 부유 모션과 포인터 입력을 처리한다.
+	/// </summary>
+	private void Update()
+	{
+		var bobOffset = Mathf.Sin(Time.time * m_BobSpeed) * m_BobAmplitude;
+		transform.localPosition = m_BasePosition + new Vector3(0f, bobOffset, 0f);
+
+		if (m_AutoSpin)
 		{
-			m_ShipRoot = (RectTransform)transform;
+			transform.Rotate(Vector3.up, m_SpinSpeed * Time.deltaTime, Space.World);
 		}
 
-		Rebuild();
+		HandlePointer();
+	}
+
+	/// <summary>
+	/// 포인터(마우스/터치) 클릭을 받아 칸을 부착/탈착한다.
+	/// </summary>
+	private void HandlePointer()
+	{
+		var pointer = Pointer.current;
+		if (pointer == null)
+		{
+			return;
+		}
+
+		if (!pointer.press.wasPressedThisFrame)
+		{
+			return;
+		}
+
+		if (m_Camera == null)
+		{
+			return;
+		}
+
+		var pointerPosition = pointer.position.ReadValue();
+		var ray = m_Camera.ScreenPointToRay(pointerPosition);
+		RaycastHit hit;
+		if (!Physics.Raycast(ray, out hit))
+		{
+			return;
+		}
+
+		CellReference cellReference;
+		if (!m_CellByObject.TryGetValue(hit.collider.gameObject, out cellReference))
+		{
+			return;
+		}
+
+		if (cellReference.IsSlot)
+		{
+			AttachModule(cellReference.Coordinate);
+		}
+		else
+		{
+			DetachModule(cellReference.Coordinate);
+		}
 	}
 
 	/// <summary>
@@ -87,17 +175,17 @@ public class ShipBuilder : MonoBehaviour
 	{
 		ClearChildren();
 
-		CreateImageObject("CoreModule", s_CoreCell, m_CoreColor);
+		CreateCell("CoreModule", s_CoreCell, m_CoreColor, m_ModuleHeight, false);
 
 		foreach (var moduleCell in m_ModuleCells)
 		{
-			CreateModule(moduleCell);
+			CreateCell("Module", moduleCell, m_ModuleColor, m_ModuleHeight, false);
 		}
 
 		var slotCells = CollectSlots();
 		foreach (var slotCell in slotCells)
 		{
-			CreateSlot(slotCell);
+			CreateCell("Slot", slotCell, m_SlotColor, m_SlotHeight, true);
 		}
 	}
 
@@ -153,55 +241,38 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 모듈 칸 생성(탭 시 탈착).
+	/// 격자 좌표에 정사각형 큐브 칸을 생성한다.
 	/// </summary>
-	private void CreateModule(Vector2Int coordinate)
+	private void CreateCell(string name, Vector2Int coordinate, Color color, float height, bool isSlot)
 	{
-		var moduleObject = CreateImageObject("Module", coordinate, m_ModuleColor);
-		var button = moduleObject.AddComponent<Button>();
-		var capturedCoordinate = coordinate;
-		button.onClick.AddListener(() => DetachModule(capturedCoordinate));
+		var cellObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+		cellObject.name = name;
+		cellObject.transform.SetParent(transform, false);
+		cellObject.transform.localPosition = new Vector3(coordinate.x * m_CellSize, height * 0.5f, coordinate.y * m_CellSize);
+		cellObject.transform.localScale = new Vector3(m_CellSize * 0.9f, height, m_CellSize * 0.9f);
+
+		var renderer = cellObject.GetComponent<Renderer>();
+		var material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+		material.SetColor("_BaseColor", color);
+		renderer.material = material;
+
+		var cellReference = new CellReference();
+		cellReference.Coordinate = coordinate;
+		cellReference.IsSlot = isSlot;
+		m_CellByObject.Add(cellObject, cellReference);
 	}
 
 	/// <summary>
-	/// 슬롯 칸 생성(탭 시 부착).
-	/// </summary>
-	private void CreateSlot(Vector2Int coordinate)
-	{
-		var slotObject = CreateImageObject("Slot", coordinate, m_SlotColor);
-		var button = slotObject.AddComponent<Button>();
-		var capturedCoordinate = coordinate;
-		button.onClick.AddListener(() => AttachModule(capturedCoordinate));
-	}
-
-	/// <summary>
-	/// 격자 좌표에 정사각형 이미지 칸을 생성한다.
-	/// </summary>
-	private GameObject CreateImageObject(string name, Vector2Int coordinate, Color color)
-	{
-		var imageObject = new GameObject(name, typeof(RectTransform), typeof(Image));
-		imageObject.layer = m_ShipRoot.gameObject.layer;
-		var rectTransform = (RectTransform)imageObject.transform;
-		rectTransform.SetParent(m_ShipRoot, false);
-		rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-		rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-		rectTransform.pivot = new Vector2(0.5f, 0.5f);
-		rectTransform.sizeDelta = new Vector2(m_CellSize, m_CellSize);
-		rectTransform.anchoredPosition = new Vector2(coordinate.x * m_CellSize, coordinate.y * m_CellSize);
-		var image = imageObject.GetComponent<Image>();
-		image.color = color;
-		return imageObject;
-	}
-
-	/// <summary>
-	/// 루트의 모든 자식 칸을 제거한다.
+	/// 모든 자식 칸을 제거한다.
 	/// </summary>
 	private void ClearChildren()
 	{
-		for (int index = m_ShipRoot.childCount - 1; index >= 0; index--)
+		for (int index = transform.childCount - 1; index >= 0; index--)
 		{
-			var childTransform = m_ShipRoot.GetChild(index);
+			var childTransform = transform.GetChild(index);
 			DestroyImmediate(childTransform.gameObject);
 		}
+
+		m_CellByObject.Clear();
 	}
 }
