@@ -17,7 +17,6 @@ public class RuntimeInitializer
 		if (scene.name == "Scene")
 		{
 			Debug.Log("[RuntimeInitializer] Initialize()");
-			GameManager.Create();
 		}
 	}
 }
