@@ -3,8 +3,8 @@ using UnityEngine.UI;
 
 
 /// <summary>
-/// 상점 컨트롤러. 상점 화면에 모듈 목록을 구성하고 구매를 처리한다.
-/// 구매 시 재화를 소비하고 인벤토리에 모듈을 추가한다.
+/// 상점 컨트롤러. 모듈을 카드 형태로 진열하고 구매를 처리한다.
+/// 구매 시 재화를 소비하고 인벤토리에 개별 모듈을 추가한다.
 /// </summary>
 public class ShopController : MonoBehaviour
 {
@@ -17,7 +17,7 @@ public class ShopController : MonoBehaviour
 	private void Start()
 	{
 		m_PlayerState = FindFirstObjectByType<PlayerState>();
-		m_Font = Font.CreateDynamicFontFromOSFont("Malgun Gothic", 36);
+		m_Font = UiFont.Default;
 
 		var canvasObject = GameObject.Find("UI/Canvas");
 		var screensTransform = canvasObject.transform.Find("Screens");
@@ -35,61 +35,110 @@ public class ShopController : MonoBehaviour
 			DestroyImmediate(shopScreen.GetChild(index).gameObject);
 		}
 
-		var header = UiFactory.CreateText("Header", shopScreen, m_Font, "상점", 56, new Color(0.85f, 0.88f, 0.95f, 1f), TextAnchor.UpperCenter);
-		var headerRect = header.rectTransform;
-		headerRect.anchorMin = new Vector2(0f, 1f);
-		headerRect.anchorMax = new Vector2(1f, 1f);
-		headerRect.pivot = new Vector2(0.5f, 1f);
-		headerRect.sizeDelta = new Vector2(0f, 80f);
-		headerRect.anchoredPosition = new Vector2(0f, -30f);
+		var banner = UiFactory.CreateImage("Banner", shopScreen, new Color(0.18f, 0.14f, 0.28f, 1f));
+		var bannerRect = (RectTransform)banner.transform;
+		bannerRect.anchorMin = new Vector2(0f, 1f);
+		bannerRect.anchorMax = new Vector2(1f, 1f);
+		bannerRect.pivot = new Vector2(0.5f, 1f);
+		bannerRect.sizeDelta = new Vector2(0f, 110f);
+		bannerRect.anchoredPosition = new Vector2(0f, 0f);
+		var bannerText = UiFactory.CreateText("Title", banner.transform, m_Font, "★ 상점 ★", 56, new Color(1f, 0.92f, 0.5f, 1f), TextAnchor.MiddleCenter);
 
 		var definitions = ModuleCatalog.Definitions;
 		for (int index = 0; index < definitions.Length; index++)
 		{
-			CreateRow(definitions[index], shopScreen, index);
+			CreateCard(definitions[index], shopScreen, index);
 		}
 	}
 
 	/// <summary>
-	/// 모듈 한 줄(이름/스탯/가격/구매)을 생성한다.
+	/// 모듈 카드를 생성한다.
 	/// </summary>
-	private void CreateRow(ModuleDefinition definition, Transform parent, int index)
+	private void CreateCard(ModuleDefinition definition, Transform parent, int index)
 	{
-		var row = UiFactory.CreateImage("Row_" + definition.DisplayName, parent, new Color(0.12f, 0.14f, 0.18f, 1f));
-		var rowRect = (RectTransform)row.transform;
-		rowRect.anchorMin = new Vector2(0f, 1f);
-		rowRect.anchorMax = new Vector2(1f, 1f);
-		rowRect.pivot = new Vector2(0.5f, 1f);
-		rowRect.sizeDelta = new Vector2(-48f, 150f);
-		rowRect.anchoredPosition = new Vector2(0f, -150f - index * 166f);
+		var frame = UiFactory.CreateImage("Card_" + definition.DisplayName, parent, definition.Color);
+		var frameRect = (RectTransform)frame.transform;
+		frameRect.anchorMin = new Vector2(0f, 1f);
+		frameRect.anchorMax = new Vector2(1f, 1f);
+		frameRect.pivot = new Vector2(0.5f, 1f);
+		frameRect.sizeDelta = new Vector2(-44f, 280f);
+		frameRect.anchoredPosition = new Vector2(0f, -134f - index * 300f);
 
-		var infoContent = BuildStatText(definition);
-		var info = UiFactory.CreateText("Info", row.transform, m_Font, infoContent, 32, Color.white, TextAnchor.MiddleLeft);
-		var infoRect = info.rectTransform;
-		infoRect.anchorMin = new Vector2(0f, 0f);
-		infoRect.anchorMax = new Vector2(0.58f, 1f);
-		infoRect.offsetMin = new Vector2(28f, 0f);
-		infoRect.offsetMax = new Vector2(0f, 0f);
+		var inner = UiFactory.CreateImage("Inner", frame.transform, new Color(0.11f, 0.12f, 0.16f, 1f));
+		var innerRect = (RectTransform)inner.transform;
+		innerRect.anchorMin = new Vector2(0f, 0f);
+		innerRect.anchorMax = new Vector2(1f, 1f);
+		innerRect.offsetMin = new Vector2(7f, 7f);
+		innerRect.offsetMax = new Vector2(-7f, -7f);
 
-		var price = UiFactory.CreateText("Price", row.transform, m_Font, "재화 " + definition.Price, 32, new Color(1f, 0.85f, 0.4f, 1f), TextAnchor.MiddleRight);
+		var iconBack = UiFactory.CreateImage("IconBack", inner.transform, new Color(0.07f, 0.08f, 0.11f, 1f));
+		var iconBackRect = (RectTransform)iconBack.transform;
+		iconBackRect.anchorMin = new Vector2(0f, 0.5f);
+		iconBackRect.anchorMax = new Vector2(0f, 0.5f);
+		iconBackRect.pivot = new Vector2(0f, 0.5f);
+		iconBackRect.sizeDelta = new Vector2(200f, 200f);
+		iconBackRect.anchoredPosition = new Vector2(24f, 0f);
+
+		var icon = UiFactory.CreateImage("Icon", iconBack.transform, definition.Color);
+		var iconRect = (RectTransform)icon.transform;
+		iconRect.anchorMin = new Vector2(0.5f, 0.5f);
+		iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+		iconRect.pivot = new Vector2(0.5f, 0.5f);
+		iconRect.sizeDelta = new Vector2(120f, 120f);
+		var iconInner = UiFactory.CreateImage("IconInner", icon.transform, new Color(1f, 1f, 1f, 0.35f));
+		var iconInnerRect = (RectTransform)iconInner.transform;
+		iconInnerRect.anchorMin = new Vector2(0.5f, 0.5f);
+		iconInnerRect.anchorMax = new Vector2(0.5f, 0.5f);
+		iconInnerRect.pivot = new Vector2(0.5f, 0.5f);
+		iconInnerRect.sizeDelta = new Vector2(52f, 52f);
+
+		var name = UiFactory.CreateText("Name", inner.transform, m_Font, definition.DisplayName, 44, Color.white, TextAnchor.UpperLeft);
+		var nameRect = name.rectTransform;
+		nameRect.anchorMin = new Vector2(0f, 1f);
+		nameRect.anchorMax = new Vector2(1f, 1f);
+		nameRect.pivot = new Vector2(0f, 1f);
+		nameRect.sizeDelta = new Vector2(-260f, 60f);
+		nameRect.anchoredPosition = new Vector2(252f, -28f);
+
+		var stat = UiFactory.CreateText("Stat", inner.transform, m_Font, BuildStatText(definition), 30, new Color(0.7f, 0.85f, 1f, 1f), TextAnchor.UpperLeft);
+		var statRect = stat.rectTransform;
+		statRect.anchorMin = new Vector2(0f, 1f);
+		statRect.anchorMax = new Vector2(1f, 1f);
+		statRect.pivot = new Vector2(0f, 1f);
+		statRect.sizeDelta = new Vector2(-260f, 90f);
+		statRect.anchoredPosition = new Vector2(252f, -96f);
+
+		var coin = UiFactory.CreateImage("Coin", inner.transform, new Color(1f, 0.82f, 0.25f, 1f));
+		var coinRect = (RectTransform)coin.transform;
+		coinRect.anchorMin = new Vector2(0f, 0f);
+		coinRect.anchorMax = new Vector2(0f, 0f);
+		coinRect.pivot = new Vector2(0f, 0f);
+		coinRect.sizeDelta = new Vector2(40f, 40f);
+		coinRect.anchoredPosition = new Vector2(252f, 28f);
+
+		var price = UiFactory.CreateText("Price", inner.transform, m_Font, definition.Price.ToString(), 38, new Color(1f, 0.9f, 0.5f, 1f), TextAnchor.LowerLeft);
 		var priceRect = price.rectTransform;
-		priceRect.anchorMin = new Vector2(0.55f, 0f);
-		priceRect.anchorMax = new Vector2(0.78f, 1f);
+		priceRect.anchorMin = new Vector2(0f, 0f);
+		priceRect.anchorMax = new Vector2(0f, 0f);
+		priceRect.pivot = new Vector2(0f, 0f);
+		priceRect.sizeDelta = new Vector2(200f, 50f);
+		priceRect.anchoredPosition = new Vector2(304f, 24f);
 
-		var buttonObject = new GameObject("Buy", typeof(RectTransform), typeof(Image), typeof(Button));
-		buttonObject.layer = parent.gameObject.layer;
-		var buttonRect = (RectTransform)buttonObject.transform;
-		buttonRect.SetParent(row.transform, false);
-		buttonRect.anchorMin = new Vector2(0.8f, 0.18f);
-		buttonRect.anchorMax = new Vector2(0.97f, 0.82f);
-		buttonRect.offsetMin = new Vector2(0f, 0f);
-		buttonRect.offsetMax = new Vector2(0f, 0f);
-		buttonObject.GetComponent<Image>().color = new Color(0.15f, 0.5f, 0.55f, 1f);
-		UiFactory.CreateText("Label", buttonObject.transform, m_Font, "구매", 32, Color.white, TextAnchor.MiddleCenter);
+		var buyObject = new GameObject("Buy", typeof(RectTransform), typeof(Image), typeof(Button));
+		buyObject.layer = parent.gameObject.layer;
+		var buyRect = (RectTransform)buyObject.transform;
+		buyRect.SetParent(inner.transform, false);
+		buyRect.anchorMin = new Vector2(1f, 0f);
+		buyRect.anchorMax = new Vector2(1f, 0f);
+		buyRect.pivot = new Vector2(1f, 0f);
+		buyRect.sizeDelta = new Vector2(240f, 96f);
+		buyRect.anchoredPosition = new Vector2(-24f, 24f);
+		buyObject.GetComponent<Image>().color = new Color(0.2f, 0.7f, 0.35f, 1f);
+		UiFactory.CreateText("Label", buyObject.transform, m_Font, "구매", 38, Color.white, TextAnchor.MiddleCenter);
 
 		var capturedType = definition.Type;
 		var capturedPrice = definition.Price;
-		buttonObject.GetComponent<Button>().onClick.AddListener(() => Buy(capturedType, capturedPrice));
+		buyObject.GetComponent<Button>().onClick.AddListener(() => Buy(capturedType, capturedPrice));
 	}
 
 	/// <summary>
@@ -97,25 +146,25 @@ public class ShopController : MonoBehaviour
 	/// </summary>
 	private string BuildStatText(ModuleDefinition definition)
 	{
-		var content = definition.DisplayName;
+		var content = "";
 		if (definition.Attack != 0)
 		{
-			content += "  공격+" + definition.Attack;
+			content += "공격 +" + definition.Attack + "   ";
 		}
 
 		if (definition.Health != 0)
 		{
-			content += "  체력+" + definition.Health;
+			content += "체력 +" + definition.Health + "   ";
 		}
 
 		if (definition.Speed != 0)
 		{
-			content += "  이동+" + definition.Speed;
+			content += "이동 +" + definition.Speed + "   ";
 		}
 
 		if (definition.Range != 0)
 		{
-			content += "  사거리 " + definition.Range;
+			content += "사거리 " + definition.Range;
 		}
 
 		return content;

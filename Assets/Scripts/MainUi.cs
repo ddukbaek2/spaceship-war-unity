@@ -24,6 +24,7 @@ public class MainUi : MonoBehaviour
 	private PlayerState m_PlayerState;
 	private GameObject m_Ship;
 	private Text m_LevelText;
+	private Text m_ExperienceText;
 	private Text m_ActivityText;
 	private Text m_CurrencyText;
 	private readonly List<Button> m_NavButtons = new List<Button>();
@@ -43,6 +44,20 @@ public class MainUi : MonoBehaviour
 		m_LevelText = topHudTransform.Find("LevelText").GetComponent<Text>();
 		m_ActivityText = topHudTransform.Find("ActivityText").GetComponent<Text>();
 		m_CurrencyText = topHudTransform.Find("CurrencyText").GetComponent<Text>();
+
+		var experienceTransform = topHudTransform.Find("ExperienceText");
+		if (experienceTransform != null)
+		{
+			m_ExperienceText = experienceTransform.GetComponent<Text>();
+		}
+
+		m_LevelText.font = UiFont.Default;
+		m_ActivityText.font = UiFont.Default;
+		m_CurrencyText.font = UiFont.Default;
+		if (m_ExperienceText != null)
+		{
+			m_ExperienceText.font = UiFont.Default;
+		}
 
 		var screensTransform = canvasTransform.Find("Screens");
 		var navigationTransform = canvasTransform.Find("BottomNavigation");
@@ -113,6 +128,12 @@ public class MainUi : MonoBehaviour
 
 		var level = m_PlayerState.Level;
 		m_LevelText.text = "Lv. " + level;
+
+		if (m_ExperienceText != null)
+		{
+			var experience = m_PlayerState.Experience;
+			m_ExperienceText.text = "EXP " + experience + " / " + level;
+		}
 
 		var activity = m_PlayerState.Activity;
 		var maxActivity = m_PlayerState.MaxActivity;

@@ -85,11 +85,15 @@ UI
 
 함선 조립 시스템:
 - `ShipBuilder : MonoBehaviour` (`Assets/Scripts/ShipBuilder.cs`) — 탑뷰 2.5D 함선 조립기.
-  - `m_ModuleCells`(HashSet<Vector2Int>)로 부착된 모듈 좌표를 관리(코어 제외).
+  - `m_ModuleCells`(Dictionary<Vector2Int,ModuleType>)로 부착된 모듈의 좌표별 종류를 관리(코어 제외). 종류별 색은 `ModuleCatalog`.
   - `Rebuild()`: 코어/모듈/슬롯 큐브를 모두 재생성. `CollectSlots()`로 슬롯 계산.
-  - `AttachModule(coord)` / `DetachModule(coord)`: 부착/탈착. 탈착 시 `PruneDisconnected()`(BFS)로 코어와 끊긴 모듈 제거.
-  - `Update()`: 부유 모션 + `HandlePointer()`(신규 Input System `Pointer.current` + `Physics.Raycast`)로 슬롯 탭→부착 / 모듈 탭→탈착.
+  - `AttachModule(coord, type)`: 부착. `TryAttachAtScreenPosition(screenPos, type)`: 드롭 위치의 슬롯에 부착(드래그용).
+  - `DetachModule(coord)`: 탈착. 탈착분 + `PruneDisconnected()`(BFS)로 끊긴 모듈을 `PlayerState`로 환원.
+  - `Update()`: 부유 모션 + `HandlePointer()`(신규 Input System `Pointer.current` + `Physics.Raycast`)로 모듈 탭→탈착. (슬롯 부착은 인벤토리 드래그로 일원화)
   - 자동 회전은 `m_AutoSpin`(기본 off) 옵션으로 토글. 부유 상하 진동은 항상 적용.
+  - 슬롯은 **드래그 중에만 반투명 표시**(`SetSlotsVisible`), 드롭 위치 슬롯에 **부착 미리보기**(`UpdateAttachPreview`: 모듈 색·높이로 변형). `BeginDragAttach`/`EndDragAttach`로 토글.
+  - 모듈은 **개별 머티리얼 + 꾸밈**: URP/Lit 이미션·메탈릭, 종류별 액센트 형상(무기=포신, 추진체=노즐, 장갑=상판). 슬롯은 투명 머티리얼.
+- `InventoryDragItem : MonoBehaviour` (`Assets/Scripts/InventoryDragItem.cs`) — 개별 모듈 드래그(고스트). 드래그 시작/중/종료에 `ShipBuilder.BeginDragAttach`/`UpdateAttachPreview`/`EndDragAttach` 호출. 슬롯 드롭 시 부착 + 인벤토리에서 해당 인스턴스 소모. `InventoryView`가 런타임에 부착.
 - `ShipCameraController : MonoBehaviour` (`Assets/Scripts/ShipCameraController.cs`) — 카메라 줌(휠/핀치).
 - 모듈 종류/스탯/진화 규칙은 추후 정의(현재는 단일 종류).
 
@@ -103,9 +107,10 @@ UI
 - `ModuleType`(enum): `Weapon`(무기) / `Armor`(장갑) / `Engine`(추진체).
 - `ModuleDefinition` + `ModuleCatalog`(`Assets/Scripts/ModuleCatalog.cs`) — 종류별 이름/가격/스탯(공격/체력/이동/사거리)/색상 정의.
   - 무기: 가격100, 공격+10, 체력10, 사거리4. / 장갑: 가격80, 체력+40. / 추진체: 가격120, 이동+5, 체력10.
-- `PlayerState` 인벤토리: `m_Inventory`(Dictionary<ModuleType,int>), `GetModuleCount`/`AddModule`/`TryRemoveModule`/`TrySpendCurrency`.
-- `ShopController`(`Assets/Scripts/ShopController.cs`) — 상점 화면에 모듈 행(이름/스탯/가격/구매) 구성, 구매 시 재화 소비→인벤토리 추가. `Game`에 부착.
-- `InventoryView`(`Assets/Scripts/InventoryView.cs`) — 개조 화면 하단 바에 보유 수량 표시. `Game`에 부착.
+- 개별 모듈: `ModuleInstance`(struct: `Id`/`Type`). 인벤토리는 **스택이 아니라 개별 개체** 목록.
+- `PlayerState` 인벤토리: `m_Modules`(List<ModuleInstance>), `Modules`/`AddModule(type)`/`ContainsModule(id)`/`RemoveModule(id)`/`TrySpendCurrency`. `Awake`에서 기본 13개(무기5/장갑4/추진체4) 지급.
+- `ShopController`(`Assets/Scripts/ShopController.cs`) — 상점 화면에 모듈 행(이름/스탯/가격/구매) 구성, 구매 시 재화 소비→인벤토리에 개별 추가. `Game`에 부착.
+- `InventoryView`(`Assets/Scripts/InventoryView.cs`) — 개조 화면 하단에 **2열 스크롤뷰**(ScrollRect+GridLayout), 보유 모듈을 개별 셀로 표시(드래그 가능). `Game`에 부착.
 - `UiFactory`(`Assets/Scripts/UiFactory.cs`) — uGUI Image/Text 생성 헬퍼.
 
 ## 6. 진행 로그
@@ -126,6 +131,11 @@ UI
     - 상점/전투/설정은 현재 "준비 중" 플레이스홀더 패널. 플레이 모드에서 전환 동작 확인.
   - Phase 2: 모듈 데이터(`ModuleType`/`ModuleCatalog`) + 상점 구매(`ShopController`) → 인벤토리 축적/표시(`InventoryView`/`UiFactory`). 컴파일 확인(직접 실행로 검증).
   - 전투 상세 설계 확정(자동 전투 연출: 적 추진체 접근→무기 빔→피격 모듈 파괴→연결 끊긴 모듈 드리프트). 문서 7항에 기록.
+  - Phase 3: `ShipBuilder`를 모듈 종류 인식(`Dictionary<Vector2Int,ModuleType>`)으로 전환. 종류별 색 반영. 인벤토리 드래그→슬롯 드롭 부착(`InventoryDragItem` + `TryAttachAtScreenPosition`), 부착 시 인벤토리 소모, 탈착/연결끊김 시 인벤토리 환원. 슬롯 탭 부착은 제거(드래그로 일원화), 모듈 탭 탈착 유지.
+  - Phase 3 보완(피드백): 인벤토리를 **개별 개체**(`ModuleInstance`) 2열 스크롤뷰로 전환, 기본 13개 지급. 슬롯은 **드래그 중에만 반투명 표시 + 부착 미리보기**. 모듈마다 **개별 머티리얼(이미션/메탈릭) + 종류별 액센트 형상**으로 꾸밈.
+  - Phase 4~6(피드백): 모듈을 **평평한 연결형 타일**(꽉 찬 셀, 낮은 높이, 위에 장식)로 재설계(빌딩 쌓기 느낌 제거). 인벤토리 **드래그(길게 눌러 픽업)와 스크롤 분리**. 상점을 **카드형(궁수의전설풍)** UI로 재구성. **전투 시스템**: 랜덤 적 목록(`BattleController`) + 전투하기(활동력 10) → **자동 전투 오버레이**(HP 바 연출) → 승리 시 재화+경험치, 패배 무보상. 상단 HUD에 **EXP** 추가, 레벨업 규칙(레벨 N에서 N승 시 레벨업). WebGL2 무압축 빌드(`build/WebGL`).
+    - 빌드 차단 해소: SPUM 서드파티 스크립트 5종의 `using UnityEditor` 미가드 → `#if UNITY_EDITOR` 추가. WebGL은 OS 동적 폰트 미지원 → `Assets/Resources/Fonts/malgun.ttf` 포함 + `UiFont`로 모든 텍스트가 폰트 에셋 사용(씬의 14개 Text도 일괄 재지정).
+    - 빌드 성공: `build/WebGL/`(index.html + Build/WebGL.{data,wasm,framework.js,loader.js} + TemplateData), 무압축(.gz/.br 없음), WebGL2(OpenGLES3), 약 76MB. 시놀로지 NAS 정적 호스팅 시 그대로 업로드.
 
 ## 7. 게임 루프 로드맵 (목표 설계)
 
@@ -154,9 +164,13 @@ UI
 - [x] 자동 회전 옵션화 / 카메라 줌 / 전체 50% 축소 / 하단 네비게이션.
 - [x] 탭 전환(개조/상점/전투/설정) + 상단 HUD(레벨/활동력/재화).
 - [x] 모듈 데이터(무기/장갑/추진체) + 상점 구매 → 인벤토리 축적·표시.
-- [ ] 개조: 인벤토리 모듈 드래그→슬롯 부착(모듈 종류별 스탯/색 반영, 인벤토리 소모).
-- [ ] 전투 목록: 스크롤뷰 상대 목록 + 대결하기(활동력 소모) → 전투 화면.
-- [ ] 전투: 결과 처리(승리=경험치+재화, 패배=무보상). 레벨업 곡선 정의.
-- [ ] 모듈 종류/스탯/가격/전투력 규칙 정의.
-- [ ] 함선 본체 시각 개선(별/우주 배경, 모듈 외형, 엔진 분사 등).
+- [x] 개조: 인벤토리 모듈 드래그→슬롯 부착(종류별 색 반영, 인벤토리 소모, 탈착 시 환원).
+- [x] 전투 목록: 스크롤뷰 랜덤 적 + 대결하기(활동력 10) → 자동 전투 오버레이.
+- [x] 전투: 결과 처리(승리=경험치+재화, 패배=무보상). 레벨업 규칙(레벨 N에서 N승).
+- [x] 상단 HUD에 경험치(EXP) 추가.
+- [x] 인벤토리 드래그/스크롤 분리, 상점 카드 UI, 모듈 평평한 연결 타일.
+- [x] WebGL2 무압축 빌드(`build/WebGL`).
+- [ ] 전투 상세 연출 고도화(빔/모듈 파괴/드리프트 — 현재는 HP 바 추상 연출).
+- [ ] 모듈 종류/스탯/가격/전투력 밸런스 조정.
+- [ ] 함선 본체 시각 개선(별/우주 배경, 엔진 분사 등).
 - [ ] `GameManager.Awake()`의 `Resources.Load("Units/PlayerCharacter")` 경로 오류 정리(현재 런타임 예외).
