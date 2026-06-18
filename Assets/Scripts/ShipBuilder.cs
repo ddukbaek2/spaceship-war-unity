@@ -6,22 +6,21 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// 함선 조립기. 탑뷰 2.5D 월드 공간에서 코어 모듈을 중심으로 상하좌우에
 /// 정사각형 모듈 타일을 동적으로 부착/탈착한다. 함선은 둥둥 떠다닌다.
-/// 모듈은 평평하게 서로 붙어 연결되며, 타일 위에 꾸밈 장식이 올라간다.
-/// 부착은 인벤토리에서 드래그하여 슬롯에 드롭하고, 모듈을 탭하면 탈착된다.
-/// 슬롯은 드래그 중에만 반투명으로 표시되며, 드롭 위치에 부착 미리보기를 보여준다.
+/// 인벤토리 항목을 선택하면 빈 칸(슬롯)이 반투명으로 표시되고, 그 칸을 탭하면 부착된다.
+/// 부착된 모듈을 탭하면 탈착된다(인벤토리로 환원).
 /// </summary>
 public class ShipBuilder : MonoBehaviour
 {
 	#region INSPECTOR
 	[SerializeField] private float m_CellSize = 1f;
 	[SerializeField] private float m_ModuleHeight = 0.18f;
-	[SerializeField] private float m_SlotHeight = 0.06f;
+	[SerializeField] private float m_SlotHeight = 0.07f;
 	[SerializeField] private float m_BobAmplitude = 0.12f;
 	[SerializeField] private float m_BobSpeed = 1.2f;
 	[SerializeField] private bool m_AutoSpin = false;
 	[SerializeField] private float m_SpinSpeed = 6f;
 	[SerializeField] private Color m_CoreColor = new Color(0.16f, 0.7f, 0.72f, 1f);
-	[SerializeField] private Color m_SlotColor = new Color(0.6f, 0.7f, 0.9f, 0.3f);
+	[SerializeField] private Color m_SlotColor = new Color(0.7f, 0.85f, 1f, 0.35f);
 	#endregion
 
 	/// <summary>
@@ -70,7 +69,7 @@ public class ShipBuilder : MonoBehaviour
 	private Vector3 m_BasePosition;
 
 	/// <summary>
-	/// 클릭/드롭 판정에 사용할 카메라.
+	/// 클릭 판정에 사용할 카메라.
 	/// </summary>
 	private Camera m_Camera;
 
@@ -80,9 +79,19 @@ public class ShipBuilder : MonoBehaviour
 	private PlayerState m_PlayerState;
 
 	/// <summary>
-	/// 드래그(부착) 진행 중 여부.
+	/// 배치 모드 진행 중 여부.
 	/// </summary>
-	private bool m_DragActive;
+	private bool m_PlacementActive;
+
+	/// <summary>
+	/// 배치 대기 중인 인벤토리 모듈 식별자.
+	/// </summary>
+	private int m_PendingInstanceId;
+
+	/// <summary>
+	/// 배치 대기 중인 모듈 종류.
+	/// </summary>
+	private ModuleType m_PendingType;
 
 	/// <summary>
 	/// 초기화됨.
@@ -112,15 +121,10 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 모듈 탭을 받아 탈착한다. (슬롯 부착은 인벤토리 드래그로 처리)
+	/// 포인터 입력 처리. 배치 모드면 슬롯 탭으로 부착, 아니면 모듈 탭으로 탈착.
 	/// </summary>
 	private void HandlePointer()
 	{
-		if (m_DragActive)
-		{
-			return;
-		}
-
 		var pointer = Pointer.current;
 		if (pointer == null)
 		{
@@ -132,11 +136,43 @@ public class ShipBuilder : MonoBehaviour
 			return;
 		}
 
-		var cellReference = Pick(pointer.position.ReadValue());
-		if (cellReference.HasValue && !cellReference.Value.IsSlot)
+		var picked = Pick(pointer.position.ReadValue());
+
+		if (m_PlacementActive)
 		{
-			DetachModule(cellReference.Value.Coordinate);
+			if (picked.HasValue && picked.Value.IsSlot)
+			{
+				PlaceAt(picked.Value.Coordinate);
+			}
+			else
+			{
+				CancelPlacement();
+			}
+
+			return;
 		}
+
+		if (picked.HasValue && !picked.Value.IsSlot)
+		{
+			DetachModule(picked.Value.Coordinate);
+		}
+	}
+
+	/// <summary>
+	/// 현재 부착된 모듈 배치를 내보낸다(전투 씬 전달용).
+	/// </summary>
+	public List<ModulePlacement> GetLayout()
+	{
+		var layout = new List<ModulePlacement>();
+		foreach (var moduleCell in m_ModuleCells)
+		{
+			var placement = new ModulePlacement();
+			placement.Coordinate = moduleCell.Key;
+			placement.Type = moduleCell.Value;
+			layout.Add(placement);
+		}
+
+		return layout;
 	}
 
 	/// <summary>
@@ -162,78 +198,43 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 드래그 부착을 시작한다. 슬롯을 반투명으로 표시한다.
+	/// 배치 모드를 시작한다. 빈 칸(슬롯)을 표시한다.
 	/// </summary>
-	public void BeginDragAttach()
+	public void BeginPlacement(int instanceId, ModuleType type)
 	{
-		m_DragActive = true;
-		ResetSlotAppearance();
+		m_PendingInstanceId = instanceId;
+		m_PendingType = type;
+		m_PlacementActive = true;
 		SetSlotsVisible(true);
 	}
 
 	/// <summary>
-	/// 드롭 위치의 슬롯에 부착 미리보기를 표시한다.
+	/// 배치 모드를 취소한다. 슬롯을 숨긴다.
 	/// </summary>
-	public void UpdateAttachPreview(Vector2 screenPosition, ModuleType type)
+	public void CancelPlacement()
 	{
-		if (!m_DragActive)
-		{
-			return;
-		}
-
-		ResetSlotAppearance();
-
-		var slotObject = PickObject(screenPosition);
-		if (slotObject == null || !m_CellByObject[slotObject].IsSlot)
-		{
-			return;
-		}
-
-		var localPosition = slotObject.transform.localPosition;
-		slotObject.transform.localScale = new Vector3(m_CellSize * 0.99f, m_ModuleHeight, m_CellSize * 0.99f);
-		slotObject.transform.localPosition = new Vector3(localPosition.x, m_ModuleHeight * 0.5f, localPosition.z);
-
-		var definition = ModuleCatalog.Get(type);
-		var previewColor = new Color(definition.Color.r, definition.Color.g, definition.Color.b, 0.85f);
-		SetCellColor(slotObject, previewColor);
-	}
-
-	/// <summary>
-	/// 드래그 부착을 종료한다. 슬롯을 숨긴다.
-	/// </summary>
-	public void EndDragAttach()
-	{
-		m_DragActive = false;
-		ResetSlotAppearance();
+		m_PlacementActive = false;
 		SetSlotsVisible(false);
 	}
 
 	/// <summary>
-	/// 화면 좌표(드롭 위치)의 슬롯에 모듈을 부착한다. 성공하면 true.
+	/// 선택한 슬롯에 대기 중인 모듈을 부착하고 인벤토리에서 소모한다.
 	/// </summary>
-	public bool TryAttachAtScreenPosition(Vector2 screenPosition, ModuleType type)
+	private void PlaceAt(Vector2Int coordinate)
 	{
-		var slotObject = PickObject(screenPosition);
-		if (slotObject == null || !m_CellByObject[slotObject].IsSlot)
+		if (m_PlayerState != null && !m_PlayerState.ContainsModule(m_PendingInstanceId))
 		{
-			return false;
-		}
-
-		AttachModule(m_CellByObject[slotObject].Coordinate, type);
-		return true;
-	}
-
-	/// <summary>
-	/// 모듈 부착.
-	/// </summary>
-	public void AttachModule(Vector2Int coordinate, ModuleType type)
-	{
-		if (coordinate == s_CoreCell)
-		{
+			CancelPlacement();
 			return;
 		}
 
-		m_ModuleCells[coordinate] = type;
+		m_ModuleCells[coordinate] = m_PendingType;
+		if (m_PlayerState != null)
+		{
+			m_PlayerState.RemoveModule(m_PendingInstanceId);
+		}
+
+		m_PlacementActive = false;
 		Rebuild();
 	}
 
@@ -274,7 +275,7 @@ public class ShipBuilder : MonoBehaviour
 			CreateSlot(slotCell);
 		}
 
-		SetSlotsVisible(m_DragActive);
+		SetSlotsVisible(m_PlacementActive);
 	}
 
 	/// <summary>
@@ -357,20 +358,6 @@ public class ShipBuilder : MonoBehaviour
 	/// </summary>
 	private CellReference? Pick(Vector2 screenPosition)
 	{
-		var pickedObject = PickObject(screenPosition);
-		if (pickedObject == null)
-		{
-			return null;
-		}
-
-		return m_CellByObject[pickedObject];
-	}
-
-	/// <summary>
-	/// 화면 좌표가 가리키는 칸 오브젝트를 반환한다.
-	/// </summary>
-	private GameObject PickObject(Vector2 screenPosition)
-	{
 		if (m_Camera == null)
 		{
 			return null;
@@ -383,13 +370,13 @@ public class ShipBuilder : MonoBehaviour
 			return null;
 		}
 
-		var hitObject = hit.collider.gameObject;
-		if (!m_CellByObject.ContainsKey(hitObject))
+		CellReference cellReference;
+		if (!m_CellByObject.TryGetValue(hit.collider.gameObject, out cellReference))
 		{
 			return null;
 		}
 
-		return hitObject;
+		return cellReference;
 	}
 
 	/// <summary>
@@ -486,7 +473,7 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 칸 위에 평평한 장식 큐브를 추가한다(충돌체 제거).
+	/// 타일 위에 평평한 장식 큐브를 추가한다(충돌체 제거).
 	/// </summary>
 	private void CreateDecoration(Transform parentCell, Vector3 localOffset, Vector3 worldScale, Material material)
 	{
@@ -540,29 +527,6 @@ public class ShipBuilder : MonoBehaviour
 		{
 			m_SlotObjects[index].GetComponent<Renderer>().enabled = visible;
 		}
-	}
-
-	/// <summary>
-	/// 모든 슬롯을 기본 모양(낮은 높이, 슬롯 색)으로 되돌린다.
-	/// </summary>
-	private void ResetSlotAppearance()
-	{
-		for (int index = 0; index < m_SlotObjects.Count; index++)
-		{
-			var slotObject = m_SlotObjects[index];
-			var localPosition = slotObject.transform.localPosition;
-			slotObject.transform.localScale = new Vector3(m_CellSize * 0.92f, m_SlotHeight, m_CellSize * 0.92f);
-			slotObject.transform.localPosition = new Vector3(localPosition.x, m_SlotHeight * 0.5f, localPosition.z);
-			SetCellColor(slotObject, m_SlotColor);
-		}
-	}
-
-	/// <summary>
-	/// 칸의 기본 색을 설정한다.
-	/// </summary>
-	private void SetCellColor(GameObject cellObject, Color color)
-	{
-		cellObject.GetComponent<Renderer>().material.SetColor("_BaseColor", color);
 	}
 
 	/// <summary>

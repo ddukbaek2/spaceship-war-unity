@@ -136,6 +136,11 @@ UI
   - Phase 4~6(피드백): 모듈을 **평평한 연결형 타일**(꽉 찬 셀, 낮은 높이, 위에 장식)로 재설계(빌딩 쌓기 느낌 제거). 인벤토리 **드래그(길게 눌러 픽업)와 스크롤 분리**. 상점을 **카드형(궁수의전설풍)** UI로 재구성. **전투 시스템**: 랜덤 적 목록(`BattleController`) + 전투하기(활동력 10) → **자동 전투 오버레이**(HP 바 연출) → 승리 시 재화+경험치, 패배 무보상. 상단 HUD에 **EXP** 추가, 레벨업 규칙(레벨 N에서 N승 시 레벨업). WebGL2 무압축 빌드(`build/WebGL`).
     - 빌드 차단 해소: SPUM 서드파티 스크립트 5종의 `using UnityEditor` 미가드 → `#if UNITY_EDITOR` 추가. WebGL은 OS 동적 폰트 미지원 → `Assets/Resources/Fonts/malgun.ttf` 포함 + `UiFont`로 모든 텍스트가 폰트 에셋 사용(씬의 14개 Text도 일괄 재지정).
     - 빌드 성공: `build/WebGL/`(index.html + Build/WebGL.{data,wasm,framework.js,loader.js} + TemplateData), 무압축(.gz/.br 없음), WebGL2(OpenGLES3), 약 76MB. 시놀로지 NAS 정적 호스팅 시 그대로 업로드.
+  - 피드백 반영(웹/조작):
+    - 커스텀 WebGL 템플릿 `Assets/WebGLTemplates/Portrait/index.html` 추가. 제품명/타이틀 `spaceship-war-unity`. (초기 빌드는 설정 미저장으로 기본 가로 템플릿이 나와 → ProjectSettings 저장 후 재빌드로 해결)
+    - 캔버스를 **창 전체(100%×100%)로 채움** + `matchWebGLToCanvasSize=false` & **devicePixelRatio 버퍼**로 가로 잘림 해소 + 텍스트 선명도 개선.
+    - **드래그 폐기 → 선택형**: 인벤토리 탭=가장 가까운 빈 칸 자동 부착(`ShipBuilder.AttachToFirstAvailable`), 함선 모듈 탭=탈착. `InventoryDragItem` 삭제, 슬롯 표시/미리보기 로직 제거(스크롤 충돌도 해소).
+    - 배포: `\\DS216PLUSII\web\ddukbaek2\portfolio\spaceship-war-unity` (robocopy /MIR).
 
 ## 7. 게임 루프 로드맵 (목표 설계)
 

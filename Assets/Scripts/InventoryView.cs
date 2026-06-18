@@ -62,7 +62,7 @@ public class InventoryView : MonoBehaviour
 		panelRect.offsetMin = new Vector2(8f, 0f);
 		panelRect.offsetMax = new Vector2(-8f, 480f);
 
-		var header = UiFactory.CreateText("Header", panel.transform, m_Font, "인벤토리 (길게 눌러 함선으로 드래그 · 끌어서 스크롤)", 24, new Color(0.7f, 0.72f, 0.78f, 1f), TextAnchor.MiddleCenter);
+		var header = UiFactory.CreateText("Header", panel.transform, m_Font, "인벤토리 (항목 선택 → 빈 칸 탭하여 부착 · 함선 모듈 탭하여 제거)", 24, new Color(0.7f, 0.72f, 0.78f, 1f), TextAnchor.MiddleCenter);
 		header.raycastTarget = false;
 		var headerRect = header.rectTransform;
 		headerRect.anchorMin = new Vector2(0f, 1f);
@@ -156,6 +156,25 @@ public class InventoryView : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 인벤토리 항목 선택 시 함선의 빈 칸(슬롯)을 표시한다(배치 모드 시작).
+	/// 실제 부착은 표시된 슬롯을 탭할 때 이뤄진다.
+	/// </summary>
+	private void OnSelectModule(int instanceId, ModuleType type)
+	{
+		if (m_ShipBuilder == null || m_PlayerState == null)
+		{
+			return;
+		}
+
+		if (!m_PlayerState.ContainsModule(instanceId))
+		{
+			return;
+		}
+
+		m_ShipBuilder.BeginPlacement(instanceId, type);
+	}
+
+	/// <summary>
 	/// 보유 모듈 셀들을 다시 생성한다.
 	/// </summary>
 	private void Refresh()
@@ -185,8 +204,10 @@ public class InventoryView : MonoBehaviour
 		var definition = ModuleCatalog.Get(instance.Type);
 
 		var cell = UiFactory.CreateImage("Cell_" + instance.Id, m_Content, new Color(0.16f, 0.18f, 0.22f, 1f));
-		var dragItem = cell.AddComponent<InventoryDragItem>();
-		dragItem.Initialize(instance.Id, instance.Type, m_PlayerState, m_ShipBuilder, m_Canvas, m_ScrollRect, definition.Color);
+		var button = cell.AddComponent<Button>();
+		var capturedId = instance.Id;
+		var capturedType = instance.Type;
+		button.onClick.AddListener(() => OnSelectModule(capturedId, capturedType));
 
 		var icon = UiFactory.CreateImage("Icon", cell.transform, definition.Color);
 		icon.GetComponent<Image>().raycastTarget = false;

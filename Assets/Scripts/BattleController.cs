@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -36,15 +37,15 @@ public class BattleController : MonoBehaviour
 	private Font m_Font;
 
 	private RectTransform m_ListContent;
-	private Text m_MessageText;
+	private TMP_Text m_MessageText;
 	private readonly List<EnemyShip> m_Enemies = new List<EnemyShip>();
 
 	private GameObject m_Overlay;
 	private RectTransform m_PlayerHpFill;
 	private RectTransform m_EnemyHpFill;
-	private Text m_PlayerLabel;
-	private Text m_EnemyLabel;
-	private Text m_ResultText;
+	private TMP_Text m_PlayerLabel;
+	private TMP_Text m_EnemyLabel;
+	private TMP_Text m_ResultText;
 	private GameObject m_BeamObject;
 	private GameObject m_ConfirmButton;
 	private bool m_Busy;
@@ -376,7 +377,7 @@ public class BattleController : MonoBehaviour
 	/// <summary>
 	/// 오버레이 중앙 기준 라벨을 생성한다.
 	/// </summary>
-	private Text CreateLabel(string name, Vector2 anchoredPosition, Color color)
+	private TMP_Text CreateLabel(string name, Vector2 anchoredPosition, Color color)
 	{
 		var label = UiFactory.CreateText(name, m_Overlay.transform, m_Font, "", 34, color, TextAnchor.MiddleCenter);
 		PlaceCenter(label.rectTransform, anchoredPosition, new Vector2(900f, 50f));

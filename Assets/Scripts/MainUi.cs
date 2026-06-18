@@ -1,11 +1,12 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 
 /// <summary>
 /// 메인 UI 컨트롤러. 하단 네비게이션 탭 전환과 상단 HUD 표시를 담당한다.
-/// 씬에 구성된 UI 오브젝트를 이름으로 찾아 연결한다.
+/// 상단 HUD/탭 라벨/설정 화면 텍스트를 TextMeshPro로 구성한다.
 /// </summary>
 public class MainUi : MonoBehaviour
 {
@@ -23,11 +24,12 @@ public class MainUi : MonoBehaviour
 
 	private PlayerState m_PlayerState;
 	private GameObject m_Ship;
-	private Text m_LevelText;
-	private Text m_ExperienceText;
-	private Text m_ActivityText;
-	private Text m_CurrencyText;
+	private TMP_Text m_LevelText;
+	private TMP_Text m_ExperienceText;
+	private TMP_Text m_ActivityText;
+	private TMP_Text m_CurrencyText;
 	private readonly List<Button> m_NavButtons = new List<Button>();
+	private readonly List<TMP_Text> m_NavLabels = new List<TMP_Text>();
 	private readonly List<GameObject> m_Screens = new List<GameObject>();
 
 	/// <summary>
@@ -40,24 +42,7 @@ public class MainUi : MonoBehaviour
 		m_PlayerState = FindFirstObjectByType<PlayerState>();
 		m_Ship = GameObject.Find("Ship");
 
-		var topHudTransform = canvasTransform.Find("TopHud");
-		m_LevelText = topHudTransform.Find("LevelText").GetComponent<Text>();
-		m_ActivityText = topHudTransform.Find("ActivityText").GetComponent<Text>();
-		m_CurrencyText = topHudTransform.Find("CurrencyText").GetComponent<Text>();
-
-		var experienceTransform = topHudTransform.Find("ExperienceText");
-		if (experienceTransform != null)
-		{
-			m_ExperienceText = experienceTransform.GetComponent<Text>();
-		}
-
-		m_LevelText.font = UiFont.Default;
-		m_ActivityText.font = UiFont.Default;
-		m_CurrencyText.font = UiFont.Default;
-		if (m_ExperienceText != null)
-		{
-			m_ExperienceText.font = UiFont.Default;
-		}
+		BuildTopHud(canvasTransform.Find("TopHud"));
 
 		var screensTransform = canvasTransform.Find("Screens");
 		var navigationTransform = canvasTransform.Find("BottomNavigation");
@@ -69,9 +54,14 @@ public class MainUi : MonoBehaviour
 
 			var navButton = navigationTransform.Find("NavButton_" + screenName).GetComponent<Button>();
 			m_NavButtons.Add(navButton);
+			var navLabel = ReplaceLabel(navButton.transform, screenName, 40);
+			m_NavLabels.Add(navLabel);
+
 			var capturedIndex = index;
 			navButton.onClick.AddListener(() => SelectScreen(capturedIndex));
 		}
+
+		BuildSettingsPlaceholder(screensTransform.Find("Screen_설정"));
 
 		if (m_PlayerState != null)
 		{
@@ -94,6 +84,70 @@ public class MainUi : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 상단 HUD 텍스트(레벨/경험치/활동력/재화)를 TMP로 구성한다.
+	/// </summary>
+	private void BuildTopHud(Transform topHud)
+	{
+		for (int index = topHud.childCount - 1; index >= 0; index--)
+		{
+			DestroyImmediate(topHud.GetChild(index).gameObject);
+		}
+
+		m_LevelText = MakeHudText(topHud, "LevelText", 0f, 0.25f, 24f, 0f, 30, Color.white, TextAnchor.MiddleLeft);
+		m_ExperienceText = MakeHudText(topHud, "ExperienceText", 0.25f, 0.5f, 0f, 0f, 28, new Color(0.65f, 0.9f, 0.55f, 1f), TextAnchor.MiddleCenter);
+		m_ActivityText = MakeHudText(topHud, "ActivityText", 0.5f, 0.78f, 0f, 0f, 28, new Color(0.6f, 0.85f, 1f, 1f), TextAnchor.MiddleCenter);
+		m_CurrencyText = MakeHudText(topHud, "CurrencyText", 0.78f, 1f, 0f, -24f, 30, new Color(1f, 0.85f, 0.4f, 1f), TextAnchor.MiddleRight);
+	}
+
+	/// <summary>
+	/// HUD 텍스트 한 칸을 생성한다.
+	/// </summary>
+	private TMP_Text MakeHudText(Transform parent, string name, float minX, float maxX, float padMin, float padMax, int fontSize, Color color, TextAnchor anchor)
+	{
+		var text = UiFactory.CreateText(name, parent, null, "", fontSize, color, anchor);
+		var rectTransform = text.rectTransform;
+		rectTransform.anchorMin = new Vector2(minX, 0f);
+		rectTransform.anchorMax = new Vector2(maxX, 1f);
+		rectTransform.offsetMin = new Vector2(padMin, 0f);
+		rectTransform.offsetMax = new Vector2(padMax, 0f);
+		return text;
+	}
+
+	/// <summary>
+	/// 버튼의 기존 라벨을 제거하고 TMP 라벨로 교체한다.
+	/// </summary>
+	private TMP_Text ReplaceLabel(Transform buttonTransform, string content, int fontSize)
+	{
+		var existing = buttonTransform.Find("Label");
+		if (existing != null)
+		{
+			DestroyImmediate(existing.gameObject);
+		}
+
+		return UiFactory.CreateText("Label", buttonTransform, null, content, fontSize, Color.white, TextAnchor.MiddleCenter);
+	}
+
+	/// <summary>
+	/// 설정 화면 플레이스홀더를 TMP로 구성한다.
+	/// </summary>
+	private void BuildSettingsPlaceholder(Transform settingsScreen)
+	{
+		if (settingsScreen == null)
+		{
+			return;
+		}
+
+		for (int index = settingsScreen.childCount - 1; index >= 0; index--)
+		{
+			DestroyImmediate(settingsScreen.GetChild(index).gameObject);
+		}
+
+		UiFactory.CreateText("Title", settingsScreen, null, "설정", 80, new Color(0.85f, 0.88f, 0.95f, 1f), TextAnchor.MiddleCenter);
+		var note = UiFactory.CreateText("Note", settingsScreen, null, "준비 중", 36, new Color(0.5f, 0.52f, 0.58f, 1f), TextAnchor.MiddleCenter);
+		note.rectTransform.anchoredPosition = new Vector2(0f, -80f);
+	}
+
+	/// <summary>
 	/// 지정한 탭 화면을 활성화한다.
 	/// </summary>
 	public void SelectScreen(int activeIndex)
@@ -106,8 +160,7 @@ public class MainUi : MonoBehaviour
 			var buttonImage = m_NavButtons[index].GetComponent<Image>();
 			buttonImage.color = isActive ? m_ActiveColor : m_InactiveColor;
 
-			var buttonLabel = m_NavButtons[index].GetComponentInChildren<Text>();
-			buttonLabel.color = isActive ? m_ActiveLabelColor : m_InactiveLabelColor;
+			m_NavLabels[index].color = isActive ? m_ActiveLabelColor : m_InactiveLabelColor;
 		}
 
 		if (m_Ship != null)
@@ -129,11 +182,8 @@ public class MainUi : MonoBehaviour
 		var level = m_PlayerState.Level;
 		m_LevelText.text = "Lv. " + level;
 
-		if (m_ExperienceText != null)
-		{
-			var experience = m_PlayerState.Experience;
-			m_ExperienceText.text = "EXP " + experience + " / " + level;
-		}
+		var experience = m_PlayerState.Experience;
+		m_ExperienceText.text = "EXP " + experience + " / " + level;
 
 		var activity = m_PlayerState.Activity;
 		var maxActivity = m_PlayerState.MaxActivity;
