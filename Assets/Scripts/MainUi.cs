@@ -18,9 +18,14 @@ public class MainUi : MonoBehaviour
 	#endregion
 
 	/// <summary>
-	/// 탭/화면 이름(좌→우 순서).
+	/// 탭/화면 오브젝트 이름(좌→우 순서).
 	/// </summary>
 	private static readonly string[] s_ScreenNames = new string[] { "개조", "상점", "전투", "설정" };
+
+	/// <summary>
+	/// 탭에 표시할 라벨(좌→우 순서). 오브젝트 이름과 별개로 화면 표기만 담당한다.
+	/// </summary>
+	private static readonly string[] s_DisplayNames = new string[] { "개조", "상점", "스테이지", "설정" };
 
 	private PlayerState m_PlayerState;
 	private GameObject m_Ship;
@@ -54,7 +59,7 @@ public class MainUi : MonoBehaviour
 
 			var navButton = navigationTransform.Find("NavButton_" + screenName).GetComponent<Button>();
 			m_NavButtons.Add(navButton);
-			var navLabel = ReplaceLabel(navButton.transform, screenName, 40);
+			var navLabel = ReplaceLabel(navButton.transform, s_DisplayNames[index], 40);
 			m_NavLabels.Add(navLabel);
 
 			var capturedIndex = index;

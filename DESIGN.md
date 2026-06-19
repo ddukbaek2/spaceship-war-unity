@@ -142,6 +142,16 @@ UI
     - **드래그 폐기 → 선택형**: 인벤토리 탭=가장 가까운 빈 칸 자동 부착(`ShipBuilder.AttachToFirstAvailable`), 함선 모듈 탭=탈착. `InventoryDragItem` 삭제, 슬롯 표시/미리보기 로직 제거(스크롤 충돌도 해소).
     - 배포: `\\DS216PLUSII\web\ddukbaek2\portfolio\spaceship-war-unity` (robocopy /MIR).
 
+- 2026-06-18 (대규모 개편 — 현재 시스템 스냅샷)
+  - **텍스트 전부 TextMeshPro(SDF) 전환**: `TmpFont`(malgun.ttf 동적 SDF), `UiFactory.CreateText`가 TMP 생성. TMP Essential Resources 임포트 + TMP 셰이더 Always Included.
+  - **라운드 코너 UI 전면 적용**: 절차 생성 스프라이트 `Assets/Resources/UI/RoundedCorner.png`(9-슬라이스) + `UiSprite`/`UiFactory.CreateImage` 기본 라운드.
+  - **전투 = 별도 씬**(`Assets/Scenes/Battle.unity`, 가산 로드로 메인 상태 보존): `BattleManager`/`BattleShip`/`BattleEffects`/`BattleContext`/`BattleCameraController`. 전투하기→활동력10→전투씬→결과→복귀. 나가기(경고→패배), 결과 팝업(승패/경험치/재화/아이템 획득·미획득). 드래그 패닝.
+  - **인벤토리 선택/장착 모델 전면 개편**: `ModuleInstance`(class, Equipped/Coordinate), `PlayerState`가 단일 진실 공급원(Select/Equip/Unequip). `ShipBuilder`는 장착 모듈을 렌더(선택 시 슬롯 표시). `InventoryView`는 **썸네일 그리드 + 선택 시 상단 정보 표시**(선택/장착 상태 배지).
+  - **모듈 테이블화**: `ModuleTable`(SO)+`Assets/Resources/ModuleTable.asset`, `ModuleCatalog`가 읽음(폴백 포함).
+  - **WebGL 셰이더 null 크래시 수정**: URP Lit/Unlit/Simple Lit Always Included + `MaterialFactory.CreateLit`(셰이더/속성 가드)로 런타임 머티리얼 일원화.
+  - **전투 고도화**: 정면(+Z) 추진/회전(추진체 수 ∝ 이동·회전), 무기 전방 빔 발사, **모듈 비주얼 `ModuleVisual`**(무기=전방 빔포/추진체=후방 부스터·분사/장갑=상판), **블록별 체력 HUD**(uGUI 추적, 만피 숨김), 1m 격자 기준 효과.
+  - **모듈 시스템 기준 문서 `ITEMMODULE.md` 신규 작성**(격자/정면/종류/인벤토리/장착/비주얼/전투 규칙). 모듈 관련 작업은 이 문서를 기준으로 한다.
+
 ## 7. 게임 루프 로드맵 (목표 설계)
 
 사용자 의도에 따른 전체 흐름. 단계별로 구현한다.

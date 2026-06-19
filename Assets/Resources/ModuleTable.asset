@@ -1,0 +1,105 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2edcc6f451df1b545856d2129b50e708, type: 3}
+  m_Name: ModuleTable
+  m_EditorClassIdentifier: Assembly-CSharp::ModuleTable
+  m_Rows:
+  - Type: 0
+    Category: 0
+    DisplayName: "\uAE30\uAD00\uD3EC"
+    Price: 90
+    Attack: 4
+    Health: 8
+    Armor: 1
+    Speed: 0
+    Range: 3
+    Color: {r: 0.95, g: 0.45, b: 0.4, a: 1}
+  - Type: 1
+    Category: 0
+    DisplayName: "\uB808\uC774\uC800"
+    Price: 130
+    Attack: 7
+    Health: 10
+    Armor: 1
+    Speed: 0
+    Range: 6
+    Color: {r: 1, g: 0.35, b: 0.5, a: 1}
+  - Type: 2
+    Category: 0
+    DisplayName: "\uCE90\uB17C"
+    Price: 180
+    Attack: 12
+    Health: 14
+    Armor: 2
+    Speed: 0
+    Range: 4
+    Color: {r: 0.8, g: 0.25, b: 0.25, a: 1}
+  - Type: 3
+    Category: 1
+    DisplayName: "\uACBD\uC7A5\uAC11"
+    Price: 60
+    Attack: 0
+    Health: 30
+    Armor: 3
+    Speed: 0
+    Range: 0
+    Color: {r: 0.55, g: 0.66, b: 0.8, a: 1}
+  - Type: 4
+    Category: 1
+    DisplayName: "\uC911\uC7A5\uAC11"
+    Price: 110
+    Attack: 0
+    Health: 65
+    Armor: 6
+    Speed: 0
+    Range: 0
+    Color: {r: 0.42, g: 0.5, b: 0.62, a: 1}
+  - Type: 5
+    Category: 1
+    DisplayName: "\uBC18\uC751\uC7A5\uAC11"
+    Price: 130
+    Attack: 0
+    Health: 45
+    Armor: 5
+    Speed: 0
+    Range: 0
+    Color: {r: 0.5, g: 0.62, b: 0.7, a: 1}
+  - Type: 6
+    Category: 2
+    DisplayName: "\uC18C\uD615\uC5D4\uC9C4"
+    Price: 90
+    Attack: 0
+    Health: 8
+    Armor: 1
+    Speed: 4
+    Range: 0
+    Color: {r: 0.95, g: 0.72, b: 0.35, a: 1}
+  - Type: 7
+    Category: 2
+    DisplayName: "\uCD94\uC9C4\uC5D4\uC9C4"
+    Price: 140
+    Attack: 0
+    Health: 10
+    Armor: 1
+    Speed: 7
+    Range: 0
+    Color: {r: 1, g: 0.62, b: 0.25, a: 1}
+  - Type: 8
+    Category: 2
+    DisplayName: "\uC30D\uBC1C\uC5D4\uC9C4"
+    Price: 190
+    Attack: 0
+    Health: 12
+    Armor: 1
+    Speed: 10
+    Range: 0
+    Color: {r: 1, g: 0.55, b: 0.18, a: 1}

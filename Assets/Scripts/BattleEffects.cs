@@ -2,12 +2,13 @@ using UnityEngine;
 
 
 /// <summary>
-/// 전투 투사체. 발사 지점에서 대상 함선의 특정 모듈로 날아가 명중 시 피해를 준다.
+/// 전투 빔 투사체. 발사 방향(빈 공간 쪽)으로 나가며 대상 함선의 가장 가까운 모듈로
+/// 약하게 유도되어 명중 시 피해를 준다. (1m 격자 기준 크기)
 /// </summary>
 public class BattleProjectile : MonoBehaviour
 {
 	private BattleShip m_TargetShip;
-	private Vector2Int m_TargetCoordinate;
+	private Vector3 m_Direction;
 	private float m_Damage;
 	private float m_Speed;
 	private float m_Life;
@@ -15,33 +16,29 @@ public class BattleProjectile : MonoBehaviour
 	/// <summary>
 	/// 투사체를 발사한다.
 	/// </summary>
-	public void Launch(Vector3 start, BattleShip targetShip, Vector2Int targetCoordinate, float damage, float speed, Color color)
+	public void Launch(Vector3 start, Vector3 direction, BattleShip targetShip, float damage, float speed, float thickness, Color color)
 	{
 		m_TargetShip = targetShip;
-		m_TargetCoordinate = targetCoordinate;
+		m_Direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
 		m_Damage = damage;
 		m_Speed = speed;
-		m_Life = 3f;
+		m_Life = 2.5f;
 
 		transform.position = start;
-		transform.localScale = new Vector3(0.18f, 0.18f, 0.55f);
-		var renderer = GetComponent<Renderer>();
-		var material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-		material.SetColor("_BaseColor", color);
-		material.EnableKeyword("_EMISSION");
-		material.SetColor("_EmissionColor", color * 2f);
-		material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-		renderer.material = material;
+		transform.localScale = new Vector3(thickness, thickness, 0.7f);
+		transform.rotation = Quaternion.LookRotation(m_Direction, Vector3.up);
 
 		var collider = GetComponent<Collider>();
 		if (collider != null)
 		{
 			Destroy(collider);
 		}
+
+		GetComponent<Renderer>().material = MaterialFactory.CreateLit(color, color * 2.2f, 0f, 0.5f, false);
 	}
 
 	/// <summary>
-	/// 매 프레임 대상으로 이동하고 명중을 처리한다.
+	/// 매 프레임 이동(약한 유도)과 명중을 처리한다.
 	/// </summary>
 	private void Update()
 	{
@@ -52,19 +49,25 @@ public class BattleProjectile : MonoBehaviour
 			return;
 		}
 
-		var targetPosition = m_TargetShip.GetTargetWorldPosition(m_TargetCoordinate);
-		var toTarget = targetPosition - transform.position;
-		var distance = toTarget.magnitude;
-		if (distance <= 0.4f)
+		Vector2Int coordinate;
+		Vector3 cellWorld;
+		if (m_TargetShip.TryGetNearestCell(transform.position, out coordinate, out cellWorld))
 		{
-			m_TargetShip.TakeDamage(m_TargetCoordinate, m_Damage);
-			Destroy(gameObject);
-			return;
+			var toCell = cellWorld - transform.position;
+			var distance = toCell.magnitude;
+			if (distance <= 0.6f)
+			{
+				m_TargetShip.TakeDamage(coordinate, m_Damage);
+				Destroy(gameObject);
+				return;
+			}
+
+			var desired = toCell / distance;
+			m_Direction = Vector3.Slerp(m_Direction, desired, 2.2f * Time.deltaTime).normalized;
 		}
 
-		var direction = toTarget / distance;
-		transform.position += direction * m_Speed * Time.deltaTime;
-		transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+		transform.position += m_Direction * m_Speed * Time.deltaTime;
+		transform.rotation = Quaternion.LookRotation(m_Direction, Vector3.up);
 	}
 }
 
@@ -108,5 +111,38 @@ public class BattleDebris : MonoBehaviour
 		transform.position += m_Velocity * Time.deltaTime;
 		transform.Rotate(m_Spin * Time.deltaTime, Space.Self);
 		transform.localScale = Vector3.Lerp(Vector3.zero, transform.localScale, 0.94f);
+	}
+}
+
+
+/// <summary>
+/// 추진체 분사 효과. 빈 공간 쪽으로 길게 뻗으며 깜빡인다.
+/// </summary>
+public class BattleThruster : MonoBehaviour
+{
+	private Vector3 m_BaseScale;
+	private float m_Phase;
+
+	/// <summary>
+	/// 분사 효과를 시작한다.
+	/// </summary>
+	public void Begin(Vector3 baseScale, float phase)
+	{
+		m_BaseScale = baseScale;
+		m_Phase = phase;
+		var collider = GetComponent<Collider>();
+		if (collider != null)
+		{
+			Destroy(collider);
+		}
+	}
+
+	/// <summary>
+	/// 매 프레임 길이를 출렁이게 한다.
+	/// </summary>
+	private void Update()
+	{
+		var pulse = 0.6f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * 14f + m_Phase));
+		transform.localScale = new Vector3(m_BaseScale.x, m_BaseScale.y, m_BaseScale.z * pulse);
 	}
 }

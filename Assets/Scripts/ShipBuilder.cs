@@ -4,10 +4,9 @@ using UnityEngine.InputSystem;
 
 
 /// <summary>
-/// 함선 조립기. 탑뷰 2.5D 월드 공간에서 코어 모듈을 중심으로 상하좌우에
-/// 정사각형 모듈 타일을 동적으로 부착/탈착한다. 함선은 둥둥 떠다닌다.
-/// 인벤토리 항목을 선택하면 빈 칸(슬롯)이 반투명으로 표시되고, 그 칸을 탭하면 부착된다.
-/// 부착된 모듈을 탭하면 탈착된다(인벤토리로 환원).
+/// 함선 조립기(개조 화면 뷰). PlayerState의 장착 모듈을 읽어 탑뷰 2.5D로 렌더한다.
+/// 인벤토리에서 모듈을 선택하면 빈 칸(슬롯)이 표시되고, 슬롯을 탭하면 장착되며
+/// 장착된 모듈을 탭하면 장착 해제된다. 함선은 둥둥 떠다닌다.
 /// </summary>
 public class ShipBuilder : MonoBehaviour
 {
@@ -23,9 +22,6 @@ public class ShipBuilder : MonoBehaviour
 	[SerializeField] private Color m_SlotColor = new Color(0.7f, 0.85f, 1f, 0.35f);
 	#endregion
 
-	/// <summary>
-	/// 인접 4방향(상/하/좌/우).
-	/// </summary>
 	private static readonly Vector2Int[] s_Directions = new Vector2Int[]
 	{
 		new Vector2Int(0, 1),
@@ -34,64 +30,20 @@ public class ShipBuilder : MonoBehaviour
 		new Vector2Int(1, 0),
 	};
 
-	/// <summary>
-	/// 코어 모듈의 격자 좌표.
-	/// </summary>
 	private static readonly Vector2Int s_CoreCell = new Vector2Int(0, 0);
 
-	/// <summary>
-	/// 칸 오브젝트가 가리키는 격자 좌표와 슬롯 여부.
-	/// </summary>
 	private struct CellReference
 	{
 		public Vector2Int Coordinate;
 		public bool IsSlot;
 	}
 
-	/// <summary>
-	/// 부착된 모듈의 격자 좌표별 종류(코어 제외).
-	/// </summary>
-	private readonly Dictionary<Vector2Int, ModuleType> m_ModuleCells = new Dictionary<Vector2Int, ModuleType>();
-
-	/// <summary>
-	/// 생성된 칸 오브젝트별 참조 정보.
-	/// </summary>
 	private readonly Dictionary<GameObject, CellReference> m_CellByObject = new Dictionary<GameObject, CellReference>();
-
-	/// <summary>
-	/// 생성된 슬롯 오브젝트 목록.
-	/// </summary>
 	private readonly List<GameObject> m_SlotObjects = new List<GameObject>();
 
-	/// <summary>
-	/// 부유 모션의 기준 위치.
-	/// </summary>
 	private Vector3 m_BasePosition;
-
-	/// <summary>
-	/// 클릭 판정에 사용할 카메라.
-	/// </summary>
 	private Camera m_Camera;
-
-	/// <summary>
-	/// 탈착 시 모듈을 환원할 플레이어 상태.
-	/// </summary>
 	private PlayerState m_PlayerState;
-
-	/// <summary>
-	/// 배치 모드 진행 중 여부.
-	/// </summary>
-	private bool m_PlacementActive;
-
-	/// <summary>
-	/// 배치 대기 중인 인벤토리 모듈 식별자.
-	/// </summary>
-	private int m_PendingInstanceId;
-
-	/// <summary>
-	/// 배치 대기 중인 모듈 종류.
-	/// </summary>
-	private ModuleType m_PendingType;
 
 	/// <summary>
 	/// 초기화됨.
@@ -101,7 +53,23 @@ public class ShipBuilder : MonoBehaviour
 		m_BasePosition = transform.localPosition;
 		m_Camera = Camera.main;
 		m_PlayerState = FindFirstObjectByType<PlayerState>();
+		if (m_PlayerState != null)
+		{
+			m_PlayerState.Changed += Rebuild;
+		}
+
 		Rebuild();
+	}
+
+	/// <summary>
+	/// 파괴됨.
+	/// </summary>
+	private void OnDestroy()
+	{
+		if (m_PlayerState != null)
+		{
+			m_PlayerState.Changed -= Rebuild;
+		}
 	}
 
 	/// <summary>
@@ -121,138 +89,66 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 포인터 입력 처리. 배치 모드면 슬롯 탭으로 부착, 아니면 모듈 탭으로 탈착.
+	/// 포인터 입력 처리. 선택 중이면 슬롯 탭으로 장착, 아니면 모듈 탭으로 해제.
 	/// </summary>
 	private void HandlePointer()
 	{
-		var pointer = Pointer.current;
-		if (pointer == null)
+		if (m_PlayerState == null)
 		{
 			return;
 		}
 
-		if (!pointer.press.wasPressedThisFrame)
+		var pointer = Pointer.current;
+		if (pointer == null || !pointer.press.wasPressedThisFrame)
 		{
 			return;
 		}
 
 		var picked = Pick(pointer.position.ReadValue());
-
-		if (m_PlacementActive)
+		if (!picked.HasValue)
 		{
-			if (picked.HasValue && picked.Value.IsSlot)
+			return;
+		}
+
+		if (picked.Value.IsSlot)
+		{
+			var selectedId = m_PlayerState.SelectedId;
+			if (selectedId != -1)
 			{
-				PlaceAt(picked.Value.Coordinate);
-			}
-			else
-			{
-				CancelPlacement();
+				var selected = m_PlayerState.GetModule(selectedId);
+				if (selected != null && !selected.Equipped)
+				{
+					m_PlayerState.TryEquip(selectedId, picked.Value.Coordinate);
+				}
 			}
 
 			return;
 		}
 
-		if (picked.HasValue && !picked.Value.IsSlot)
+		if (picked.Value.Coordinate == s_CoreCell)
 		{
-			DetachModule(picked.Value.Coordinate);
+			m_PlayerState.ClearSelection();
+			return;
+		}
+
+		var instanceId = m_PlayerState.GetEquippedInstanceAt(picked.Value.Coordinate);
+		if (instanceId != -1)
+		{
+			m_PlayerState.SelectModule(instanceId);
 		}
 	}
 
 	/// <summary>
-	/// 현재 부착된 모듈 배치를 내보낸다(전투 씬 전달용).
+	/// 현재 장착된 모듈 배치를 반환한다(전투 씬 전달용).
 	/// </summary>
 	public List<ModulePlacement> GetLayout()
 	{
-		var layout = new List<ModulePlacement>();
-		foreach (var moduleCell in m_ModuleCells)
-		{
-			var placement = new ModulePlacement();
-			placement.Coordinate = moduleCell.Key;
-			placement.Type = moduleCell.Value;
-			layout.Add(placement);
-		}
-
-		return layout;
-	}
-
-	/// <summary>
-	/// 함선 종합 스탯을 계산한다(코어 기본값 + 모듈 합산).
-	/// </summary>
-	public ShipStats GetStats()
-	{
-		var stats = new ShipStats();
-		stats.Attack = 2;
-		stats.Health = 60;
-		stats.Speed = 1;
-
-		foreach (var moduleCell in m_ModuleCells)
-		{
-			var definition = ModuleCatalog.Get(moduleCell.Value);
-			stats.Attack += definition.Attack;
-			stats.Health += definition.Health;
-			stats.Speed += definition.Speed;
-		}
-
-		stats.Power = stats.Attack * 3 + stats.Health + stats.Speed * 2;
-		return stats;
-	}
-
-	/// <summary>
-	/// 배치 모드를 시작한다. 빈 칸(슬롯)을 표시한다.
-	/// </summary>
-	public void BeginPlacement(int instanceId, ModuleType type)
-	{
-		m_PendingInstanceId = instanceId;
-		m_PendingType = type;
-		m_PlacementActive = true;
-		SetSlotsVisible(true);
-	}
-
-	/// <summary>
-	/// 배치 모드를 취소한다. 슬롯을 숨긴다.
-	/// </summary>
-	public void CancelPlacement()
-	{
-		m_PlacementActive = false;
-		SetSlotsVisible(false);
-	}
-
-	/// <summary>
-	/// 선택한 슬롯에 대기 중인 모듈을 부착하고 인벤토리에서 소모한다.
-	/// </summary>
-	private void PlaceAt(Vector2Int coordinate)
-	{
-		if (m_PlayerState != null && !m_PlayerState.ContainsModule(m_PendingInstanceId))
-		{
-			CancelPlacement();
-			return;
-		}
-
-		m_ModuleCells[coordinate] = m_PendingType;
 		if (m_PlayerState != null)
 		{
-			m_PlayerState.RemoveModule(m_PendingInstanceId);
+			return m_PlayerState.GetEquipped();
 		}
 
-		m_PlacementActive = false;
-		Rebuild();
-	}
-
-	/// <summary>
-	/// 모듈 탈착. 탈착된 모듈과, 그로 인해 코어와 끊긴 모듈을 인벤토리로 환원한다.
-	/// </summary>
-	public void DetachModule(Vector2Int coordinate)
-	{
-		ModuleType removedType;
-		if (!m_ModuleCells.TryGetValue(coordinate, out removedType))
-		{
-			return;
-		}
-
-		m_ModuleCells.Remove(coordinate);
-		RefundModule(removedType);
-		PruneDisconnected();
-		Rebuild();
+		return new List<ModulePlacement>();
 	}
 
 	/// <summary>
@@ -264,27 +160,86 @@ public class ShipBuilder : MonoBehaviour
 
 		CreateCore();
 
-		foreach (var moduleCell in m_ModuleCells)
+		var equipped = m_PlayerState != null ? m_PlayerState.GetEquipped() : new List<ModulePlacement>();
+		foreach (var placement in equipped)
 		{
-			CreateModule(moduleCell.Key, moduleCell.Value);
+			CreateModule(placement.Coordinate, placement.Type);
 		}
 
-		var slotCells = CollectSlots();
+		CreateConnectors(equipped);
+
+		var slotCells = CollectSlots(equipped);
 		foreach (var slotCell in slotCells)
 		{
 			CreateSlot(slotCell);
 		}
 
-		SetSlotsVisible(m_PlacementActive);
+		var showSlots = false;
+		if (m_PlayerState != null && m_PlayerState.SelectedId != -1)
+		{
+			var selected = m_PlayerState.GetModule(m_PlayerState.SelectedId);
+			showSlots = selected != null && !selected.Equipped;
+		}
+
+		SetSlotsVisible(showSlots);
 	}
 
 	/// <summary>
-	/// 점유된 칸(코어+모듈)에 인접한 빈 칸을 슬롯으로 수집한다.
+	/// 인접한 부착 칸 사이에 연결 블록을 붙인다(연결되는 느낌).
 	/// </summary>
-	public HashSet<Vector2Int> CollectSlots()
+	private void CreateConnectors(List<ModulePlacement> equipped)
 	{
-		var occupiedCells = new HashSet<Vector2Int>(m_ModuleCells.Keys);
+		var occupied = new HashSet<Vector2Int>();
+		occupied.Add(s_CoreCell);
+		for (int index = 0; index < equipped.Count; index++)
+		{
+			occupied.Add(equipped[index].Coordinate);
+		}
+
+		var pairDirections = new Vector2Int[] { new Vector2Int(1, 0), new Vector2Int(0, 1) };
+		foreach (var cell in occupied)
+		{
+			for (int d = 0; d < pairDirections.Length; d++)
+			{
+				var neighbor = cell + pairDirections[d];
+				if (occupied.Contains(neighbor))
+				{
+					var midLocal = (ToLocal(cell) + ToLocal(neighbor)) * 0.5f;
+					CreateConnector(midLocal, pairDirections[d]);
+				}
+			}
+		}
+	}
+
+	/// <summary>
+	/// 연결 블록 하나를 생성한다.
+	/// </summary>
+	private void CreateConnector(Vector3 localPosition, Vector2Int direction)
+	{
+		var connector = GameObject.CreatePrimitive(PrimitiveType.Cube);
+		connector.name = "Connector";
+		Destroy(connector.GetComponent<Collider>());
+		connector.transform.SetParent(transform, false);
+		var along = m_CellSize * 0.34f;
+		var across = m_CellSize * 0.22f;
+		var sizeX = direction.x != 0 ? along : across;
+		var sizeZ = direction.y != 0 ? along : across;
+		connector.transform.localPosition = new Vector3(localPosition.x, 0.22f, localPosition.z);
+		connector.transform.localScale = new Vector3(sizeX, 0.34f, sizeZ);
+		connector.GetComponent<Renderer>().material = MaterialFactory.CreateLit(new Color(0.7f, 0.74f, 0.8f, 1f), new Color(0.2f, 0.22f, 0.26f, 1f), 0.7f, 0.7f, false);
+	}
+
+	/// <summary>
+	/// 점유된 칸(코어+장착 모듈)에 인접한 빈 칸을 슬롯으로 수집한다.
+	/// </summary>
+	private HashSet<Vector2Int> CollectSlots(List<ModulePlacement> equipped)
+	{
+		var occupiedCells = new HashSet<Vector2Int>();
 		occupiedCells.Add(s_CoreCell);
+		for (int index = 0; index < equipped.Count; index++)
+		{
+			occupiedCells.Add(equipped[index].Coordinate);
+		}
 
 		var slotCells = new HashSet<Vector2Int>();
 		foreach (var occupiedCell in occupiedCells)
@@ -300,57 +255,6 @@ public class ShipBuilder : MonoBehaviour
 		}
 
 		return slotCells;
-	}
-
-	/// <summary>
-	/// 코어와 연결되지 않은 모듈을 제거하고 인벤토리로 환원한다.
-	/// </summary>
-	public void PruneDisconnected()
-	{
-		var connectedCells = new HashSet<Vector2Int>();
-		var searchQueue = new Queue<Vector2Int>();
-		connectedCells.Add(s_CoreCell);
-		searchQueue.Enqueue(s_CoreCell);
-
-		while (searchQueue.Count > 0)
-		{
-			var currentCell = searchQueue.Dequeue();
-			foreach (var direction in s_Directions)
-			{
-				var neighborCell = currentCell + direction;
-				if (m_ModuleCells.ContainsKey(neighborCell) && !connectedCells.Contains(neighborCell))
-				{
-					connectedCells.Add(neighborCell);
-					searchQueue.Enqueue(neighborCell);
-				}
-			}
-		}
-
-		var disconnectedCells = new List<Vector2Int>();
-		foreach (var moduleCell in m_ModuleCells)
-		{
-			if (!connectedCells.Contains(moduleCell.Key))
-			{
-				disconnectedCells.Add(moduleCell.Key);
-			}
-		}
-
-		foreach (var disconnectedCell in disconnectedCells)
-		{
-			RefundModule(m_ModuleCells[disconnectedCell]);
-			m_ModuleCells.Remove(disconnectedCell);
-		}
-	}
-
-	/// <summary>
-	/// 모듈을 인벤토리로 환원한다.
-	/// </summary>
-	private void RefundModule(ModuleType type)
-	{
-		if (m_PlayerState != null)
-		{
-			m_PlayerState.AddModule(type);
-		}
 	}
 
 	/// <summary>
@@ -380,71 +284,50 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 코어 모듈을 생성한다(평평한 타일 + 발광 장식).
+	/// 코어 모듈을 생성한다.
 	/// </summary>
 	private void CreateCore()
 	{
-		var bodyMaterial = CreateLitMaterial(m_CoreColor, m_CoreColor * 0.8f, 0.45f, 0.7f, false);
-		var coreObject = CreateCell("CoreModule", s_CoreCell, m_ModuleHeight, 0.99f, bodyMaterial, false);
+		var root = ModuleFactory.CreateCore(transform, ToLocal(s_CoreCell));
+		if (root == null)
+		{
+			return;
+		}
 
-		var insetMaterial = CreateLitMaterial(new Color(0.5f, 0.95f, 0.95f, 1f), new Color(0.4f, 1f, 1f, 1f), 0.3f, 0.85f, false);
-		CreateDecoration(coreObject.transform, new Vector3(0f, m_ModuleHeight + 0.03f, 0f), new Vector3(m_CellSize * 0.6f, 0.06f, m_CellSize * 0.6f), insetMaterial);
-		CreateDecoration(coreObject.transform, new Vector3(0f, m_ModuleHeight + 0.06f, 0f), new Vector3(m_CellSize * 0.26f, 0.08f, m_CellSize * 0.26f), insetMaterial);
+		root.name = "CoreModule";
+		var cellReference = new CellReference();
+		cellReference.Coordinate = s_CoreCell;
+		cellReference.IsSlot = false;
+		m_CellByObject.Add(root, cellReference);
 	}
 
 	/// <summary>
-	/// 모듈을 생성한다(평평한 타일 + 종류별 장식).
+	/// 격자 좌표를 로컬 위치로 변환한다.
+	/// </summary>
+	private Vector3 ToLocal(Vector2Int coordinate)
+	{
+		return new Vector3(coordinate.x * m_CellSize, 0f, coordinate.y * m_CellSize);
+	}
+
+	/// <summary>
+	/// 모듈을 생성한다.
 	/// </summary>
 	private void CreateModule(Vector2Int coordinate, ModuleType type)
 	{
-		var definition = ModuleCatalog.Get(type);
-		var bodyColor = definition.Color * 0.55f;
-		bodyColor.a = 1f;
-		var bodyMaterial = CreateLitMaterial(bodyColor, definition.Color * 0.25f, 0.55f, 0.65f, false);
-		var moduleObject = CreateCell("Module", coordinate, m_ModuleHeight, 0.99f, bodyMaterial, false);
+		var root = ModuleFactory.CreateModule(type, transform, ToLocal(coordinate));
+		if (root == null)
+		{
+			return;
+		}
 
-		var insetMaterial = CreateLitMaterial(definition.Color, definition.Color * 0.7f, 0.5f, 0.75f, false);
-		CreateDecoration(moduleObject.transform, new Vector3(0f, m_ModuleHeight + 0.03f, 0f), new Vector3(m_CellSize * 0.62f, 0.06f, m_CellSize * 0.62f), insetMaterial);
-
-		var markMaterial = CreateLitMaterial(new Color(0.95f, 0.95f, 0.95f, 1f), definition.Color, 0.4f, 0.85f, false);
-		var markOffset = GetMarkOffset(type);
-		var markScale = GetMarkScale(type);
-		CreateDecoration(moduleObject.transform, new Vector3(markOffset.x, m_ModuleHeight + 0.06f, markOffset.y), markScale, markMaterial);
+		var cellReference = new CellReference();
+		cellReference.Coordinate = coordinate;
+		cellReference.IsSlot = false;
+		m_CellByObject.Add(root, cellReference);
 	}
 
 	/// <summary>
-	/// 종류별 중심 장식의 평면 오프셋.
-	/// </summary>
-	private Vector2 GetMarkOffset(ModuleType type)
-	{
-		if (type == ModuleType.Engine)
-		{
-			return new Vector2(0f, -m_CellSize * 0.22f);
-		}
-
-		return new Vector2(0f, 0f);
-	}
-
-	/// <summary>
-	/// 종류별 중심 장식의 크기.
-	/// </summary>
-	private Vector3 GetMarkScale(ModuleType type)
-	{
-		if (type == ModuleType.Weapon)
-		{
-			return new Vector3(m_CellSize * 0.16f, 0.08f, m_CellSize * 0.42f);
-		}
-
-		if (type == ModuleType.Engine)
-		{
-			return new Vector3(m_CellSize * 0.42f, 0.08f, m_CellSize * 0.2f);
-		}
-
-		return new Vector3(m_CellSize * 0.32f, 0.08f, m_CellSize * 0.32f);
-	}
-
-	/// <summary>
-	/// 슬롯 칸을 생성한다(반투명, 기본 숨김).
+	/// 슬롯 칸을 생성한다(반투명, 선택 중에만 표시).
 	/// </summary>
 	private void CreateSlot(Vector2Int coordinate)
 	{
@@ -487,35 +370,11 @@ public class ShipBuilder : MonoBehaviour
 	}
 
 	/// <summary>
-	/// URP/Lit 머티리얼을 생성한다(불투명/투명, 이미션, 금속/매끄러움).
+	/// URP/Lit 머티리얼을 생성한다.
 	/// </summary>
 	private Material CreateLitMaterial(Color baseColor, Color emission, float metallic, float smoothness, bool transparent)
 	{
-		var material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-		material.SetColor("_BaseColor", baseColor);
-		material.SetFloat("_Metallic", metallic);
-		material.SetFloat("_Smoothness", smoothness);
-
-		if (emission.maxColorComponent > 0f)
-		{
-			material.EnableKeyword("_EMISSION");
-			material.SetColor("_EmissionColor", emission);
-			material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-		}
-
-		if (transparent)
-		{
-			material.SetFloat("_Surface", 1f);
-			material.SetFloat("_Blend", 0f);
-			material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-			material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-			material.SetFloat("_ZWrite", 0f);
-			material.DisableKeyword("_ALPHATEST_ON");
-			material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-			material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-		}
-
-		return material;
+		return MaterialFactory.CreateLit(baseColor, emission, metallic, smoothness, transparent);
 	}
 
 	/// <summary>

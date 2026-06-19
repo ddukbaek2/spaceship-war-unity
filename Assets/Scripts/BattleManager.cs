@@ -1,11 +1,12 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 
 /// <summary>
-/// 전투 매니저(전투 씬). 탑뷰 3D 공간에 플레이어/적 함선을 배치하고
-/// 적이 시야 밖에서 접근하여 교전하게 한다. 승패가 결정되면 결과를 표시하고
-/// 콜백으로 메인 씬에 알린다.
+/// 전투 매니저(전투 씬). 탑뷰 3D 공간에 플레이어/적 함선을 배치하고 교전시킨다.
+/// 나가기(경고 후 패배 처리), 결과 팝업(승패/경험치/재화/아이템 보상)을 제공한다.
+/// 드래그로 화면(공간)을 이동할 수 있다(BattleCameraController).
 /// </summary>
 public class BattleManager : MonoBehaviour
 {
@@ -13,26 +14,34 @@ public class BattleManager : MonoBehaviour
 	private BattleShip m_Enemy;
 	private bool m_Finished;
 	private float m_Elapsed;
-	private bool m_PlayerWon;
-	private int m_Reward;
+	private Camera m_BattleCamera;
+	private RectTransform m_HudCanvas;
 
+	private GameObject m_ExitButton;
+	private GameObject m_WarningPanel;
 	private GameObject m_ResultPanel;
-	private TMPro.TMP_Text m_ResultText;
-	private GameObject m_ConfirmButton;
+	private TMPro.TMP_Text m_ResultTitle;
+	private TMPro.TMP_Text m_ExperienceLine;
+	private TMPro.TMP_Text m_CurrencyLine;
+	private TMPro.TMP_Text m_ItemLine;
 
 	/// <summary>
-	/// 초기화됨. 환경과 함선을 구성한다.
+	/// 초기화됨. 환경과 함선, UI를 구성한다.
 	/// </summary>
 	private void Start()
 	{
+		SceneManager.SetActiveScene(gameObject.scene);
+		Time.timeScale = 1f;
+
 		SetupEnvironment();
+		BuildHealthHud();
 
 		m_Player = SpawnShip(BattleContext.PlayerLayout, new Color(0.3f, 0.82f, 0.85f, 1f), false, new Vector3(0f, 0f, -4f));
 		m_Enemy = SpawnShip(BattleContext.EnemyLayout, new Color(0.88f, 0.42f, 0.42f, 1f), true, new Vector3(Random.Range(-4f, 4f), 0f, 26f));
 		m_Player.SetOpponent(m_Enemy);
 		m_Enemy.SetOpponent(m_Player);
 
-		BuildResultUi();
+		BuildUi();
 	}
 
 	/// <summary>
@@ -78,6 +87,8 @@ public class BattleManager : MonoBehaviour
 		camera.clearFlags = CameraClearFlags.SolidColor;
 		camera.backgroundColor = new Color(0.02f, 0.03f, 0.06f, 1f);
 		camera.farClipPlane = 200f;
+		m_BattleCamera = camera;
+		cameraObject.AddComponent<BattleCameraController>();
 
 		var lightObject = new GameObject("BattleLight");
 		lightObject.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
@@ -85,6 +96,12 @@ public class BattleManager : MonoBehaviour
 		light.type = LightType.Directional;
 		light.intensity = 1.1f;
 		light.color = new Color(0.9f, 0.93f, 1f, 1f);
+
+		var skydomePrefab = Resources.Load<GameObject>("Modules/Skydome");
+		if (skydomePrefab != null)
+		{
+			Instantiate(skydomePrefab);
+		}
 
 		var borderColor = new Color(0.2f, 0.5f, 0.7f, 1f);
 		CreateBar(new Vector3(0f, 0f, 15f), new Vector3(30f, 0.1f, 0.25f), borderColor);
@@ -103,12 +120,7 @@ public class BattleManager : MonoBehaviour
 		Destroy(bar.GetComponent<Collider>());
 		bar.transform.position = position;
 		bar.transform.localScale = scale;
-		var material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-		material.SetColor("_BaseColor", color);
-		material.EnableKeyword("_EMISSION");
-		material.SetColor("_EmissionColor", color * 1.2f);
-		material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-		bar.GetComponent<Renderer>().material = material;
+		bar.GetComponent<Renderer>().material = MaterialFactory.CreateLit(color, color * 1.2f, 0f, 0.5f, false);
 	}
 
 	/// <summary>
@@ -119,16 +131,33 @@ public class BattleManager : MonoBehaviour
 		var shipObject = new GameObject(isEnemy ? "EnemyShip" : "PlayerShip");
 		shipObject.transform.position = position;
 		var ship = shipObject.AddComponent<BattleShip>();
-		ship.Build(layout, coreColor, isEnemy);
+		ship.Build(layout, coreColor, isEnemy, m_BattleCamera, m_HudCanvas);
 		return ship;
 	}
 
 	/// <summary>
-	/// 결과 UI(오버레이 캔버스)를 구성한다(기본 숨김).
+	/// 체력바용 HUD 캔버스(오버레이)를 만든다.
 	/// </summary>
-	private void BuildResultUi()
+	private void BuildHealthHud()
 	{
-		var canvasObject = new GameObject("BattleResultCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+		var canvasObject = new GameObject("HealthHud", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+		canvasObject.layer = LayerMask.NameToLayer("UI");
+		var canvas = canvasObject.GetComponent<Canvas>();
+		canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+		canvas.sortingOrder = 50;
+		var scaler = canvasObject.GetComponent<CanvasScaler>();
+		scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+		scaler.referenceResolution = new Vector2(1080f, 1920f);
+		scaler.matchWidthOrHeight = 0.5f;
+		m_HudCanvas = (RectTransform)canvasObject.transform;
+	}
+
+	/// <summary>
+	/// 전투 UI(나가기 버튼/경고 팝업/결과 팝업)를 구성한다.
+	/// </summary>
+	private void BuildUi()
+	{
+		var canvasObject = new GameObject("BattleCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
 		canvasObject.layer = LayerMask.NameToLayer("UI");
 		var canvas = canvasObject.GetComponent<Canvas>();
 		canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -137,55 +166,212 @@ public class BattleManager : MonoBehaviour
 		scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
 		scaler.referenceResolution = new Vector2(1080f, 1920f);
 		scaler.matchWidthOrHeight = 0.5f;
+		var canvasTransform = canvasObject.transform;
 
-		m_ResultPanel = UiFactory.CreateImage("Panel", canvasObject.transform, new Color(0.08f, 0.09f, 0.13f, 0.96f));
-		var panelRect = (RectTransform)m_ResultPanel.transform;
+		BuildExitButton(canvasTransform);
+		BuildWarningPopup(canvasTransform);
+		BuildResultPopup(canvasTransform);
+	}
+
+	/// <summary>
+	/// 나가기 버튼을 만든다(우상단).
+	/// </summary>
+	private void BuildExitButton(Transform parent)
+	{
+		m_ExitButton = UiFactory.CreateImage("ExitButton", parent, new Color(0.6f, 0.2f, 0.24f, 1f));
+		var rect = (RectTransform)m_ExitButton.transform;
+		rect.anchorMin = new Vector2(1f, 1f);
+		rect.anchorMax = new Vector2(1f, 1f);
+		rect.pivot = new Vector2(1f, 1f);
+		rect.sizeDelta = new Vector2(190f, 92f);
+		rect.anchoredPosition = new Vector2(-24f, -24f);
+		var button = m_ExitButton.AddComponent<Button>();
+		button.onClick.AddListener(OnExitClicked);
+		var label = UiFactory.CreateText("Label", m_ExitButton.transform, null, "나가기", 36, Color.white, TextAnchor.MiddleCenter);
+		label.raycastTarget = false;
+	}
+
+	/// <summary>
+	/// 나가기 경고 팝업을 만든다(기본 숨김).
+	/// </summary>
+	private void BuildWarningPopup(Transform parent)
+	{
+		m_WarningPanel = UiFactory.CreateImage("WarningDim", parent, new Color(0f, 0f, 0f, 0.65f));
+		var dimRect = (RectTransform)m_WarningPanel.transform;
+		dimRect.anchorMin = new Vector2(0f, 0f);
+		dimRect.anchorMax = new Vector2(1f, 1f);
+		dimRect.offsetMin = new Vector2(0f, 0f);
+		dimRect.offsetMax = new Vector2(0f, 0f);
+
+		var panel = UiFactory.CreateImage("Panel", m_WarningPanel.transform, new Color(0.1f, 0.11f, 0.15f, 1f));
+		var panelRect = (RectTransform)panel.transform;
 		panelRect.anchorMin = new Vector2(0.5f, 0.5f);
 		panelRect.anchorMax = new Vector2(0.5f, 0.5f);
 		panelRect.pivot = new Vector2(0.5f, 0.5f);
-		panelRect.sizeDelta = new Vector2(760f, 460f);
-		panelRect.anchoredPosition = new Vector2(0f, 0f);
+		panelRect.sizeDelta = new Vector2(800f, 420f);
 
-		m_ResultText = UiFactory.CreateText("Result", m_ResultPanel.transform, null, "", 56, Color.white, TextAnchor.MiddleCenter);
-		var resultRect = m_ResultText.rectTransform;
-		resultRect.anchorMin = new Vector2(0f, 0.35f);
-		resultRect.anchorMax = new Vector2(1f, 1f);
-		resultRect.offsetMin = new Vector2(0f, 0f);
-		resultRect.offsetMax = new Vector2(0f, 0f);
+		var message = UiFactory.CreateText("Message", panel.transform, null, "전투에서 나가면 패배로 처리됩니다.\n나가시겠습니까?", 38, Color.white, TextAnchor.MiddleCenter);
+		var messageRect = message.rectTransform;
+		messageRect.anchorMin = new Vector2(0f, 0.35f);
+		messageRect.anchorMax = new Vector2(1f, 1f);
+		messageRect.offsetMin = new Vector2(20f, 0f);
+		messageRect.offsetMax = new Vector2(-20f, 0f);
 
-		m_ConfirmButton = UiFactory.CreateImage("Confirm", m_ResultPanel.transform, new Color(0.2f, 0.55f, 0.6f, 1f));
-		var confirmRect = (RectTransform)m_ConfirmButton.transform;
-		confirmRect.anchorMin = new Vector2(0.5f, 0f);
-		confirmRect.anchorMax = new Vector2(0.5f, 0f);
-		confirmRect.pivot = new Vector2(0.5f, 0f);
-		confirmRect.sizeDelta = new Vector2(320f, 110f);
-		confirmRect.anchoredPosition = new Vector2(0f, 48f);
-		var confirmButton = m_ConfirmButton.AddComponent<Button>();
-		confirmButton.onClick.AddListener(OnConfirm);
-		var confirmLabel = UiFactory.CreateText("Label", m_ConfirmButton.transform, null, "확인", 40, Color.white, TextAnchor.MiddleCenter);
-		confirmLabel.raycastTarget = false;
+		var cancelButton = CreateButton(panel.transform, "Cancel", "취소", new Color(0.3f, 0.34f, 0.4f, 1f), new Vector2(0.28f, 0f), OnWarningCancel);
+		var exitButton = CreateButton(panel.transform, "Exit", "나가기", new Color(0.75f, 0.25f, 0.3f, 1f), new Vector2(0.72f, 0f), OnWarningConfirm);
+
+		m_WarningPanel.SetActive(false);
+	}
+
+	/// <summary>
+	/// 결과 팝업을 만든다(기본 숨김).
+	/// </summary>
+	private void BuildResultPopup(Transform parent)
+	{
+		m_ResultPanel = UiFactory.CreateImage("ResultDim", parent, new Color(0f, 0f, 0f, 0.6f));
+		var dimRect = (RectTransform)m_ResultPanel.transform;
+		dimRect.anchorMin = new Vector2(0f, 0f);
+		dimRect.anchorMax = new Vector2(1f, 1f);
+		dimRect.offsetMin = new Vector2(0f, 0f);
+		dimRect.offsetMax = new Vector2(0f, 0f);
+
+		var panel = UiFactory.CreateImage("Panel", m_ResultPanel.transform, new Color(0.09f, 0.1f, 0.14f, 1f));
+		var panelRect = (RectTransform)panel.transform;
+		panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+		panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+		panelRect.pivot = new Vector2(0.5f, 0.5f);
+		panelRect.sizeDelta = new Vector2(840f, 720f);
+
+		m_ResultTitle = CreateCenteredText(panel.transform, "Title", 64, Color.white, 250f, new Vector2(760f, 110f));
+		m_ExperienceLine = CreateCenteredText(panel.transform, "ExperienceLine", 40, Color.white, 90f, new Vector2(700f, 70f));
+		m_CurrencyLine = CreateCenteredText(panel.transform, "CurrencyLine", 40, Color.white, 10f, new Vector2(700f, 70f));
+		m_ItemLine = CreateCenteredText(panel.transform, "ItemLine", 40, Color.white, -70f, new Vector2(700f, 70f));
+
+		CreateButton(panel.transform, "Confirm", "확인", new Color(0.2f, 0.55f, 0.6f, 1f), new Vector2(0.5f, 0f), OnConfirm);
 
 		m_ResultPanel.SetActive(false);
 	}
 
 	/// <summary>
-	/// 전투를 종료하고 결과를 표시한다.
+	/// 패널 하단(앵커 minX/maxX 비율) 위치에 버튼을 만든다.
+	/// </summary>
+	private GameObject CreateButton(Transform parent, string name, string content, Color color, Vector2 anchor, UnityEngine.Events.UnityAction onClick)
+	{
+		var buttonObject = UiFactory.CreateImage(name, parent, color);
+		var rect = (RectTransform)buttonObject.transform;
+		rect.anchorMin = new Vector2(anchor.x, 0f);
+		rect.anchorMax = new Vector2(anchor.x, 0f);
+		rect.pivot = new Vector2(0.5f, 0f);
+		rect.sizeDelta = new Vector2(300f, 110f);
+		rect.anchoredPosition = new Vector2(0f, 40f);
+		var button = buttonObject.AddComponent<Button>();
+		button.onClick.AddListener(onClick);
+		var label = UiFactory.CreateText("Label", buttonObject.transform, null, content, 40, Color.white, TextAnchor.MiddleCenter);
+		label.raycastTarget = false;
+		return buttonObject;
+	}
+
+	/// <summary>
+	/// 패널 중앙 기준 텍스트를 만든다.
+	/// </summary>
+	private TMPro.TMP_Text CreateCenteredText(Transform parent, string name, int fontSize, Color color, float anchoredY, Vector2 size)
+	{
+		var text = UiFactory.CreateText(name, parent, null, "", fontSize, color, TextAnchor.MiddleCenter);
+		var rect = text.rectTransform;
+		rect.anchorMin = new Vector2(0.5f, 0.5f);
+		rect.anchorMax = new Vector2(0.5f, 0.5f);
+		rect.pivot = new Vector2(0.5f, 0.5f);
+		rect.sizeDelta = size;
+		rect.anchoredPosition = new Vector2(0f, anchoredY);
+		return text;
+	}
+
+	/// <summary>
+	/// 나가기 클릭. 경고 팝업을 띄우고 전투를 일시정지한다.
+	/// </summary>
+	private void OnExitClicked()
+	{
+		m_WarningPanel.SetActive(true);
+		Time.timeScale = 0f;
+	}
+
+	/// <summary>
+	/// 경고 취소. 전투를 재개한다.
+	/// </summary>
+	private void OnWarningCancel()
+	{
+		m_WarningPanel.SetActive(false);
+		Time.timeScale = 1f;
+	}
+
+	/// <summary>
+	/// 경고 확인(나가기). 패배로 처리한다.
+	/// </summary>
+	private void OnWarningConfirm()
+	{
+		m_WarningPanel.SetActive(false);
+		Finish(false);
+	}
+
+	/// <summary>
+	/// 전투를 종료하고 보상을 계산해 결과를 표시한다.
 	/// </summary>
 	private void Finish(bool playerWon)
 	{
-		m_Finished = true;
-		m_PlayerWon = playerWon;
-		m_Reward = playerWon ? Mathf.RoundToInt(BattleContext.EnemyPower * 0.4f) + Random.Range(10, 40) : 0;
+		if (m_Finished)
+		{
+			return;
+		}
 
+		m_Finished = true;
+		Time.timeScale = 1f;
+		m_ExitButton.SetActive(false);
+
+		BattleContext.ResultPlayerWon = playerWon;
 		if (playerWon)
 		{
-			m_ResultText.text = "승리!\n재화 +" + m_Reward + "   경험치 +1";
-			m_ResultText.color = new Color(0.6f, 1f, 0.6f, 1f);
+			BattleContext.ResultCurrency = Mathf.RoundToInt(BattleContext.EnemyPower * 0.4f) + Random.Range(10, 40);
+			BattleContext.ResultExperience = 1;
+			BattleContext.ResultHasItem = Random.value < 0.5f;
+			BattleContext.ResultItem = (ModuleType)Random.Range(0, 3);
 		}
 		else
 		{
-			m_ResultText.text = "패배...";
-			m_ResultText.color = new Color(1f, 0.5f, 0.5f, 1f);
+			BattleContext.ResultCurrency = 0;
+			BattleContext.ResultExperience = 0;
+			BattleContext.ResultHasItem = false;
+		}
+
+		ShowResult(playerWon);
+	}
+
+	/// <summary>
+	/// 결과 팝업 내용을 채우고 표시한다.
+	/// </summary>
+	private void ShowResult(bool playerWon)
+	{
+		var gainColor = new Color(0.6f, 1f, 0.65f, 1f);
+		var missColor = new Color(0.55f, 0.57f, 0.62f, 1f);
+
+		m_ResultTitle.text = playerWon ? "승리!" : "패배...";
+		m_ResultTitle.color = playerWon ? gainColor : new Color(1f, 0.5f, 0.5f, 1f);
+
+		m_ExperienceLine.text = "경험치        " + (playerWon ? "+1" : "+0");
+		m_ExperienceLine.color = playerWon ? gainColor : missColor;
+
+		m_CurrencyLine.text = "재화           " + (playerWon ? "+" + BattleContext.ResultCurrency : "+0");
+		m_CurrencyLine.color = playerWon ? gainColor : missColor;
+
+		if (playerWon && BattleContext.ResultHasItem)
+		{
+			var definition = ModuleCatalog.Get(BattleContext.ResultItem);
+			m_ItemLine.text = "아이템        " + definition.DisplayName + " 모듈 획득";
+			m_ItemLine.color = gainColor;
+		}
+		else
+		{
+			m_ItemLine.text = "아이템        없음";
+			m_ItemLine.color = missColor;
 		}
 
 		m_ResultPanel.SetActive(true);
@@ -196,10 +382,11 @@ public class BattleManager : MonoBehaviour
 	/// </summary>
 	private void OnConfirm()
 	{
+		Time.timeScale = 1f;
 		var callback = BattleContext.OnFinished;
 		if (callback != null)
 		{
-			callback(m_PlayerWon, m_Reward);
+			callback();
 		}
 	}
 }

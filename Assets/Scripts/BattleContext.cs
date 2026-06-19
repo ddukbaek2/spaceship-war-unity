@@ -39,7 +39,37 @@ public static class BattleContext
 	public static int EnemyPower;
 
 	/// <summary>
-	/// 전투 종료 콜백. (승리 여부, 획득 재화)
+	/// 스테이지 번호(클리어 기록용).
 	/// </summary>
-	public static Action<bool, int> OnFinished;
+	public static int StageIndex;
+
+	/// <summary>
+	/// 승리 여부.
+	/// </summary>
+	public static bool ResultPlayerWon;
+
+	/// <summary>
+	/// 획득 재화.
+	/// </summary>
+	public static int ResultCurrency;
+
+	/// <summary>
+	/// 획득 경험치(승리 1, 패배 0).
+	/// </summary>
+	public static int ResultExperience;
+
+	/// <summary>
+	/// 아이템 획득 여부.
+	/// </summary>
+	public static bool ResultHasItem;
+
+	/// <summary>
+	/// 획득 아이템(모듈) 종류.
+	/// </summary>
+	public static ModuleType ResultItem;
+
+	/// <summary>
+	/// 전투 종료 콜백(결과는 위 필드에서 읽는다).
+	/// </summary>
+	public static Action OnFinished;
 }

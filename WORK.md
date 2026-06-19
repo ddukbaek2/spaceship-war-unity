@@ -10,7 +10,5 @@ claude --dangerously-skip-permissions
 3. 프로젝트 터미널 (파워쉘)로 UV 설치.
 - powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-
-
-
-유니티 CLI
+# 유니티 CLI
+ - 고려중
