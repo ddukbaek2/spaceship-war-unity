@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -16,6 +18,11 @@ public class BattleManager : MonoBehaviour
 	private float m_Elapsed;
 	private Camera m_BattleCamera;
 	private RectTransform m_HudCanvas;
+	private VirtualJoystick m_Joystick;
+	private bool m_ManualControl;
+	private PlayerState m_PlayerState;
+	private GameObject m_ControlToggle;
+	private TMPro.TMP_Text m_ControlLabel;
 
 	private GameObject m_ExitButton;
 	private GameObject m_WarningPanel;
@@ -41,6 +48,10 @@ public class BattleManager : MonoBehaviour
 		m_Player.SetOpponent(m_Enemy);
 		m_Enemy.SetOpponent(m_Player);
 
+		m_PlayerState = FindFirstObjectByType<PlayerState>();
+		m_ManualControl = BattleContext.ManualMove;
+		m_Player.SetManualControl(m_ManualControl);
+
 		BuildUi();
 	}
 
@@ -52,6 +63,17 @@ public class BattleManager : MonoBehaviour
 		if (m_Finished)
 		{
 			return;
+		}
+
+		if (m_Player != null && m_Player.IsAlive)
+		{
+			var moveInput = Vector2.zero;
+			if (m_ManualControl && m_Joystick != null)
+			{
+				moveInput = m_Joystick.Direction;
+			}
+
+			m_Player.SetMoveInput(moveInput);
 		}
 
 		m_Elapsed += Time.deltaTime;
@@ -80,15 +102,21 @@ public class BattleManager : MonoBehaviour
 	private void SetupEnvironment()
 	{
 		var cameraObject = new GameObject("BattleCamera");
-		cameraObject.transform.position = new Vector3(0f, 20f, -10f);
+		cameraObject.transform.position = new Vector3(0f, 40f, -20f);
 		cameraObject.transform.LookAt(new Vector3(0f, 0f, 3f));
 		var camera = cameraObject.AddComponent<Camera>();
 		camera.fieldOfView = 52f;
-		camera.clearFlags = CameraClearFlags.SolidColor;
+		camera.clearFlags = CameraClearFlags.Skybox;
 		camera.backgroundColor = new Color(0.02f, 0.03f, 0.06f, 1f);
 		camera.farClipPlane = 200f;
 		m_BattleCamera = camera;
 		cameraObject.AddComponent<BattleCameraController>();
+
+		var cameraData = camera.GetUniversalAdditionalCameraData();
+		cameraData.renderPostProcessing = true;
+
+		SkyboxFactory.Apply();
+		BuildPostProcessing();
 
 		var lightObject = new GameObject("BattleLight");
 		lightObject.transform.rotation = Quaternion.Euler(52f, -28f, 0f);
@@ -97,17 +125,30 @@ public class BattleManager : MonoBehaviour
 		light.intensity = 1.1f;
 		light.color = new Color(0.9f, 0.93f, 1f, 1f);
 
-		var skydomePrefab = Resources.Load<GameObject>("Modules/Skydome");
-		if (skydomePrefab != null)
-		{
-			Instantiate(skydomePrefab);
-		}
-
 		var borderColor = new Color(0.2f, 0.5f, 0.7f, 1f);
 		CreateBar(new Vector3(0f, 0f, 15f), new Vector3(30f, 0.1f, 0.25f), borderColor);
 		CreateBar(new Vector3(0f, 0f, -15f), new Vector3(30f, 0.1f, 0.25f), borderColor);
 		CreateBar(new Vector3(15f, 0f, 0f), new Vector3(0.25f, 0.1f, 30f), borderColor);
 		CreateBar(new Vector3(-15f, 0f, 0f), new Vector3(0.25f, 0.1f, 30f), borderColor);
+	}
+
+	/// <summary>
+	/// 전역 블룸 볼륨을 만든다(레이저/이미션이 빛나 보이도록).
+	/// </summary>
+	private void BuildPostProcessing()
+	{
+		var volumeObject = new GameObject("PostVolume");
+		var volume = volumeObject.AddComponent<Volume>();
+		volume.isGlobal = true;
+		volume.priority = 1f;
+
+		var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+		volume.profile = profile;
+
+		var bloom = profile.Add<Bloom>(true);
+		bloom.intensity.Override(1.6f);
+		bloom.threshold.Override(0.85f);
+		bloom.scatter.Override(0.72f);
 	}
 
 	/// <summary>
@@ -169,8 +210,103 @@ public class BattleManager : MonoBehaviour
 		var canvasTransform = canvasObject.transform;
 
 		BuildExitButton(canvasTransform);
+		BuildControlToggle(canvasTransform);
+		BuildJoystick(canvasTransform);
 		BuildWarningPopup(canvasTransform);
 		BuildResultPopup(canvasTransform);
+	}
+
+	/// <summary>
+	/// 우주선 조작 방식(자동/수동) 토글 버튼을 만든다(나가기 버튼 왼쪽).
+	/// 카메라 드래그 이동과 무관하게, 함선 조작만 자동 추격 ↔ 조이스틱 수동으로 전환한다.
+	/// </summary>
+	private void BuildControlToggle(Transform parent)
+	{
+		m_ControlToggle = UiFactory.CreateImage("ControlToggle", parent, new Color(0.2f, 0.42f, 0.48f, 1f));
+		var rect = (RectTransform)m_ControlToggle.transform;
+		rect.anchorMin = new Vector2(1f, 1f);
+		rect.anchorMax = new Vector2(1f, 1f);
+		rect.pivot = new Vector2(1f, 1f);
+		rect.sizeDelta = new Vector2(240f, 92f);
+		rect.anchoredPosition = new Vector2(-(24f + 190f + 16f), -24f);
+		var button = m_ControlToggle.AddComponent<Button>();
+		button.onClick.AddListener(OnControlToggle);
+		m_ControlLabel = UiFactory.CreateText("Label", m_ControlToggle.transform, null, "", 32, Color.white, TextAnchor.MiddleCenter);
+		m_ControlLabel.raycastTarget = false;
+		RefreshControlLabel();
+	}
+
+	/// <summary>
+	/// 조작 방식을 자동/수동으로 전환한다. 조이스틱 표시 여부와 함선 제어를 함께 바꾸고, 설정에도 저장한다.
+	/// </summary>
+	private void OnControlToggle()
+	{
+		m_ManualControl = !m_ManualControl;
+		if (m_Player != null)
+		{
+			m_Player.SetManualControl(m_ManualControl);
+			m_Player.SetMoveInput(Vector2.zero);
+		}
+
+		if (m_Joystick != null)
+		{
+			m_Joystick.gameObject.SetActive(m_ManualControl);
+		}
+
+		BattleContext.ManualMove = m_ManualControl;
+		if (m_PlayerState != null)
+		{
+			m_PlayerState.SetManualMove(m_ManualControl);
+		}
+
+		RefreshControlLabel();
+	}
+
+	/// <summary>
+	/// 조작 토글 버튼 라벨을 갱신한다.
+	/// </summary>
+	private void RefreshControlLabel()
+	{
+		if (m_ControlLabel == null)
+		{
+			return;
+		}
+
+		m_ControlLabel.text = m_ManualControl ? "조작: 수동" : "조작: 자동";
+	}
+
+	/// <summary>
+	/// 화면 하단 중앙에 가상 조이스틱을 만든다(수동 이동용).
+	/// </summary>
+	private void BuildJoystick(Transform parent)
+	{
+		var background = UiFactory.CreateImage("Joystick", parent, new Color(0.1f, 0.12f, 0.16f, 0.45f));
+		var backgroundImage = background.GetComponent<Image>();
+		backgroundImage.sprite = UiSprite.Circle;
+		backgroundImage.type = Image.Type.Simple;
+		var backgroundRect = (RectTransform)background.transform;
+		backgroundRect.anchorMin = new Vector2(0.5f, 0f);
+		backgroundRect.anchorMax = new Vector2(0.5f, 0f);
+		backgroundRect.pivot = new Vector2(0.5f, 0f);
+		backgroundRect.sizeDelta = new Vector2(300f, 300f);
+		backgroundRect.anchoredPosition = new Vector2(0f, 70f);
+
+		var handle = UiFactory.CreateImage("Handle", background.transform, new Color(0.45f, 0.85f, 0.92f, 0.9f));
+		var handleImage = handle.GetComponent<Image>();
+		handleImage.sprite = UiSprite.Circle;
+		handleImage.type = Image.Type.Simple;
+		handleImage.raycastTarget = false;
+		var handleRect = (RectTransform)handle.transform;
+		handleRect.anchorMin = new Vector2(0.5f, 0.5f);
+		handleRect.anchorMax = new Vector2(0.5f, 0.5f);
+		handleRect.pivot = new Vector2(0.5f, 0.5f);
+		handleRect.sizeDelta = new Vector2(130f, 130f);
+		handleRect.anchoredPosition = new Vector2(0f, 0f);
+
+		var joystick = background.AddComponent<VirtualJoystick>();
+		joystick.Configure(backgroundRect, handleRect, 100f);
+		m_Joystick = joystick;
+		background.SetActive(m_ManualControl);
 	}
 
 	/// <summary>

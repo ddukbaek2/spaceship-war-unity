@@ -120,8 +120,9 @@ public class InventoryView : MonoBehaviour
 		contentObject.transform.SetParent(viewportRect, false);
 		m_Content = (RectTransform)contentObject.transform;
 		m_Content.anchorMin = new Vector2(0f, 1f);
-		m_Content.anchorMax = new Vector2(1f, 1f);
-		m_Content.pivot = new Vector2(0.5f, 1f);
+		m_Content.anchorMax = new Vector2(0f, 1f);
+		m_Content.pivot = new Vector2(0f, 1f);
+		m_Content.anchoredPosition = new Vector2(0f, 0f);
 
 		var grid = contentObject.GetComponent<GridLayoutGroup>();
 		grid.cellSize = new Vector2(110f, 110f);
@@ -133,7 +134,7 @@ public class InventoryView : MonoBehaviour
 
 		var sizeFitter = contentObject.GetComponent<ContentSizeFitter>();
 		sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-		sizeFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+		sizeFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 
 		var scrollbar = CreateScrollbar(scrollViewRect);
 
@@ -146,6 +147,17 @@ public class InventoryView : MonoBehaviour
 		m_ScrollRect.scrollSensitivity = 30f;
 		m_ScrollRect.verticalScrollbar = scrollbar;
 		m_ScrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+	}
+
+	/// <summary>
+	/// 화면을 초기화한다(스크롤 맨 위).
+	/// </summary>
+	public void ResetView()
+	{
+		if (m_ScrollRect != null)
+		{
+			m_ScrollRect.verticalNormalizedPosition = 1f;
+		}
 	}
 
 	/// <summary>
@@ -229,27 +241,10 @@ public class InventoryView : MonoBehaviour
 		}
 
 		var equipped = m_PlayerState.GetEquipped();
-		var power = ComputePower(equipped);
-		m_Header.text = "인벤토리    |    전투력 " + power;
-	}
-
-	/// <summary>
-	/// 장착 배치로부터 전투력을 계산한다(전투 컨트롤러와 동일 기준).
-	/// </summary>
-	private int ComputePower(System.Collections.Generic.List<ModulePlacement> layout)
-	{
-		var attack = 2;
-		var health = 60;
-		var speed = 1;
-		for (int index = 0; index < layout.Count; index++)
-		{
-			var definition = ModuleCatalog.Get(layout[index].Type);
-			attack += definition.Attack;
-			health += definition.Health;
-			speed += definition.Speed;
-		}
-
-		return attack * 3 + health + speed * 2;
+		var power = ModuleCatalog.ComputePower(equipped);
+		var supply = ModuleCatalog.ComputeSupply(equipped);
+		var cost = ModuleCatalog.ComputeCost(equipped);
+		m_Header.text = "전투력 " + power + "   |   동력 " + cost + "/" + supply + (cost > supply ? " (부족)" : "");
 	}
 
 	/// <summary>

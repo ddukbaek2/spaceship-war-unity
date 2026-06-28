@@ -49,6 +49,7 @@ public class BattleController : MonoBehaviour
 	private Canvas m_Canvas;
 
 	private RectTransform m_ListContent;
+	private ScrollRect m_ScrollRect;
 	private TMP_Text m_MessageText;
 	private readonly List<EnemyShip> m_Enemies = new List<EnemyShip>();
 	private bool m_Busy;
@@ -126,13 +127,25 @@ public class BattleController : MonoBehaviour
 		m_ListContent.anchorMax = new Vector2(1f, 1f);
 		m_ListContent.pivot = new Vector2(0.5f, 1f);
 
-		var scrollRect = scrollViewObject.GetComponent<ScrollRect>();
-		scrollRect.content = m_ListContent;
-		scrollRect.viewport = viewportRect;
-		scrollRect.horizontal = false;
-		scrollRect.vertical = true;
-		scrollRect.movementType = ScrollRect.MovementType.Elastic;
-		scrollRect.scrollSensitivity = 30f;
+		m_ScrollRect = scrollViewObject.GetComponent<ScrollRect>();
+		m_ScrollRect.content = m_ListContent;
+		m_ScrollRect.viewport = viewportRect;
+		m_ScrollRect.horizontal = false;
+		m_ScrollRect.vertical = true;
+		m_ScrollRect.movementType = ScrollRect.MovementType.Elastic;
+		m_ScrollRect.scrollSensitivity = 30f;
+	}
+
+	/// <summary>
+	/// 화면을 초기화한다(목록 갱신 + 스크롤 맨 위).
+	/// </summary>
+	public void ResetView()
+	{
+		RefreshList();
+		if (m_ScrollRect != null)
+		{
+			m_ScrollRect.verticalNormalizedPosition = 1f;
+		}
 	}
 
 	/// <summary>
@@ -142,26 +155,106 @@ public class BattleController : MonoBehaviour
 	{
 		var previousState = Random.state;
 		m_Enemies.Clear();
-		for (int index = 0; index < StageCount; index++)
+
+		var rows = LoadStageRows();
+		for (int index = 0; index < rows.Length; index++)
 		{
-			m_Enemies.Add(CreateStage(index));
+			m_Enemies.Add(CreateStage(rows[index]));
 		}
 
 		Random.state = previousState;
 	}
 
 	/// <summary>
-	/// 스테이지 번호로 결정적 적 우주선(모듈 배치)을 만든다.
+	/// 스테이지 JSON 테이블의 한 행(엑셀→JSON 변환 결과).
 	/// </summary>
-	private EnemyShip CreateStage(int stageIndex)
+	[System.Serializable]
+	private class StageJsonRow
 	{
-		Random.InitState(7919 + stageIndex * 131);
+		public int Index;
+		public string EnemyName;
+		public int ModuleCount;
+		public int MaxTier;
+		public int Seed;
+	}
+
+	/// <summary>
+	/// 스테이지 JSON 테이블(행 배열).
+	/// </summary>
+	[System.Serializable]
+	private class StageJsonTable
+	{
+		public StageJsonRow[] rows;
+	}
+
+	/// <summary>
+	/// 스테이지 행을 로드한다(JSON 우선, 없으면 기본값).
+	/// </summary>
+	private StageJsonRow[] LoadStageRows()
+	{
+		var jsonAsset = Resources.Load<TextAsset>("Tables/Stages");
+		if (jsonAsset != null)
+		{
+			var parsed = JsonUtility.FromJson<StageJsonTable>(jsonAsset.text);
+			if (parsed != null && parsed.rows != null && parsed.rows.Length > 0)
+			{
+				return parsed.rows;
+			}
+		}
+
+		return DefaultStageRows();
+	}
+
+	/// <summary>
+	/// 기본 스테이지 행(테이블 부재 시).
+	/// </summary>
+	private StageJsonRow[] DefaultStageRows()
+	{
+		var rows = new StageJsonRow[StageCount];
+		for (int index = 0; index < StageCount; index++)
+		{
+			var row = new StageJsonRow();
+			row.Index = index;
+			row.EnemyName = s_EnemyNames[index % s_EnemyNames.Length];
+			row.ModuleCount = Mathf.Min(1 + index, 8);
+			row.MaxTier = Mathf.Min(index / 3, s_StageTiers.Length - 1);
+			row.Seed = 7919 + index * 131;
+			rows[index] = row;
+		}
+
+		return rows;
+	}
+
+	/// <summary>
+	/// 스테이지 난이도 티어별 모듈 풀(약→강). 인덱스가 낮을수록 약하다.
+	/// </summary>
+	private static readonly ModuleType[][] s_StageTiers = new ModuleType[][]
+	{
+		new ModuleType[] { ModuleType.WeaponMachineGun, ModuleType.ArmorLight, ModuleType.EngineSmall },
+		new ModuleType[] { ModuleType.WeaponLaser, ModuleType.ArmorReactive, ModuleType.EngineThrust },
+		new ModuleType[] { ModuleType.WeaponCannon, ModuleType.ArmorHeavy, ModuleType.EngineTwin },
+	};
+
+	/// <summary>
+	/// 스테이지 번호로 결정적 적 우주선(모듈 배치)을 만든다.
+	/// 스테이지가 오를수록 모듈 수가 늘고 강한 티어 모듈이 섞인다.
+	/// </summary>
+	private EnemyShip CreateStage(StageJsonRow row)
+	{
+		Random.InitState(row.Seed);
+
+		var maxTier = Mathf.Clamp(row.MaxTier, 0, s_StageTiers.Length - 1);
+		var pool = new List<ModuleType>();
+		for (int tier = 0; tier <= maxTier; tier++)
+		{
+			pool.AddRange(s_StageTiers[tier]);
+		}
 
 		var layout = new List<ModulePlacement>();
 		var occupied = new HashSet<Vector2Int>();
 		occupied.Add(s_CoreCell);
 
-		var count = Mathf.Min(2 + stageIndex, 8);
+		var count = Mathf.Min(row.ModuleCount, 8);
 		for (int index = 0; index < count; index++)
 		{
 			var slots = new List<Vector2Int>();
@@ -185,36 +278,17 @@ public class BattleController : MonoBehaviour
 			var coordinate = slots[Random.Range(0, slots.Count)];
 			var placement = new ModulePlacement();
 			placement.Coordinate = coordinate;
-			placement.Type = (ModuleType)Random.Range(0, 9);
+			placement.Type = pool[Random.Range(0, pool.Count)];
 			layout.Add(placement);
 			occupied.Add(coordinate);
 		}
 
 		var enemy = new EnemyShip();
-		enemy.StageIndex = stageIndex;
-		enemy.Name = "스테이지 " + (stageIndex + 1) + " · " + s_EnemyNames[stageIndex % s_EnemyNames.Length];
+		enemy.StageIndex = row.Index;
+		enemy.Name = "스테이지 " + (row.Index + 1) + " · " + row.EnemyName;
 		enemy.Layout = layout;
-		enemy.Power = ComputePower(layout);
+		enemy.Power = ModuleCatalog.ComputePower(layout);
 		return enemy;
-	}
-
-	/// <summary>
-	/// 배치로부터 전투력을 계산한다.
-	/// </summary>
-	private int ComputePower(List<ModulePlacement> layout)
-	{
-		var attack = 2;
-		var health = 60;
-		var speed = 1;
-		for (int index = 0; index < layout.Count; index++)
-		{
-			var definition = ModuleCatalog.Get(layout[index].Type);
-			attack += definition.Attack;
-			health += definition.Health;
-			speed += definition.Speed;
-		}
-
-		return attack * 3 + health + speed * 2;
 	}
 
 	/// <summary>
@@ -240,6 +314,22 @@ public class BattleController : MonoBehaviour
 		{
 			CreateEnemyRow(m_Enemies[index], index, topPad, stride);
 		}
+
+		UpdateMessage();
+	}
+
+	/// <summary>
+	/// 안내 메시지(누적 승리 포함)를 갱신한다.
+	/// </summary>
+	private void UpdateMessage()
+	{
+		if (m_MessageText == null)
+		{
+			return;
+		}
+
+		var wins = m_PlayerState != null ? m_PlayerState.Wins : 0;
+		m_MessageText.text = "스테이지를 선택하세요 · 누적 승리 " + wins + " (활동력 " + ActivityCost + ")";
 	}
 
 	/// <summary>
@@ -248,7 +338,21 @@ public class BattleController : MonoBehaviour
 	private void CreateEnemyRow(EnemyShip enemy, int index, float topPad, float stride)
 	{
 		var cleared = m_PlayerState != null && m_PlayerState.IsStageCleared(enemy.StageIndex);
-		var rowColor = cleared ? new Color(0.13f, 0.19f, 0.16f, 1f) : new Color(0.14f, 0.15f, 0.19f, 1f);
+		var unlocked = cleared || enemy.StageIndex == 0 || (m_PlayerState != null && m_PlayerState.IsStageCleared(enemy.StageIndex - 1));
+		Color rowColor;
+		if (!unlocked)
+		{
+			rowColor = new Color(0.1f, 0.1f, 0.12f, 1f);
+		}
+		else if (cleared)
+		{
+			rowColor = new Color(0.13f, 0.19f, 0.16f, 1f);
+		}
+		else
+		{
+			rowColor = new Color(0.14f, 0.15f, 0.19f, 1f);
+		}
+
 		var row = UiFactory.CreateImage("Enemy", m_ListContent, rowColor);
 		var rowRect = (RectTransform)row.transform;
 		rowRect.anchorMin = new Vector2(0f, 1f);
@@ -257,19 +361,8 @@ public class BattleController : MonoBehaviour
 		rowRect.sizeDelta = new Vector2(-24f, RowHeight);
 		rowRect.anchoredPosition = new Vector2(0f, -(topPad + index * stride));
 
-		if (cleared)
-		{
-			var clearBadge = UiFactory.CreateText("Clear", row.transform, null, "✔ 클리어", 26, new Color(0.5f, 1f, 0.6f, 1f), TextAnchor.UpperRight);
-			clearBadge.raycastTarget = false;
-			var clearRect = clearBadge.rectTransform;
-			clearRect.anchorMin = new Vector2(0.4f, 1f);
-			clearRect.anchorMax = new Vector2(1f, 1f);
-			clearRect.pivot = new Vector2(1f, 1f);
-			clearRect.sizeDelta = new Vector2(-260f, 40f);
-			clearRect.anchoredPosition = new Vector2(-24f, -10f);
-		}
-
-		var name = UiFactory.CreateText("Name", row.transform, null, enemy.Name, 36, Color.white, TextAnchor.MiddleLeft);
+		var nameColor = unlocked ? Color.white : new Color(0.55f, 0.57f, 0.62f, 1f);
+		var name = UiFactory.CreateText("Name", row.transform, null, enemy.Name, 36, nameColor, TextAnchor.MiddleLeft);
 		var nameRect = name.rectTransform;
 		nameRect.anchorMin = new Vector2(0f, 0.5f);
 		nameRect.anchorMax = new Vector2(0.6f, 1f);
@@ -283,19 +376,46 @@ public class BattleController : MonoBehaviour
 		powerRect.offsetMin = new Vector2(28f, 0f);
 		powerRect.offsetMax = new Vector2(0f, 0f);
 
-		var fightObject = UiFactory.CreateImage("Fight", row.transform, new Color(0.75f, 0.25f, 0.3f, 1f));
-		var fightRect = (RectTransform)fightObject.transform;
-		fightRect.anchorMin = new Vector2(1f, 0.5f);
-		fightRect.anchorMax = new Vector2(1f, 0.5f);
-		fightRect.pivot = new Vector2(1f, 0.5f);
-		fightRect.sizeDelta = new Vector2(220f, 100f);
-		fightRect.anchoredPosition = new Vector2(-24f, 0f);
-		var fightButton = fightObject.AddComponent<Button>();
-		var fightLabel = UiFactory.CreateText("Label", fightObject.transform, null, "전투하기", 32, Color.white, TextAnchor.MiddleCenter);
-		fightLabel.raycastTarget = false;
+		if (cleared)
+		{
+			var clearBadge = UiFactory.CreateText("Clear", row.transform, null, "✔ 클리어", 26, new Color(0.5f, 1f, 0.6f, 1f), TextAnchor.MiddleRight);
+			clearBadge.raycastTarget = false;
+			var clearRect = clearBadge.rectTransform;
+			clearRect.anchorMin = new Vector2(1f, 0.5f);
+			clearRect.anchorMax = new Vector2(1f, 0.5f);
+			clearRect.pivot = new Vector2(1f, 0.5f);
+			clearRect.sizeDelta = new Vector2(150f, 40f);
+			clearRect.anchoredPosition = new Vector2(-(24f + 220f + 20f), 0f);
+		}
 
-		var capturedEnemy = enemy;
-		fightButton.onClick.AddListener(() => OnFight(capturedEnemy));
+		if (unlocked)
+		{
+			var fightObject = UiFactory.CreateImage("Fight", row.transform, new Color(0.75f, 0.25f, 0.3f, 1f));
+			var fightRect = (RectTransform)fightObject.transform;
+			fightRect.anchorMin = new Vector2(1f, 0.5f);
+			fightRect.anchorMax = new Vector2(1f, 0.5f);
+			fightRect.pivot = new Vector2(1f, 0.5f);
+			fightRect.sizeDelta = new Vector2(220f, 100f);
+			fightRect.anchoredPosition = new Vector2(-24f, 0f);
+			var fightButton = fightObject.AddComponent<Button>();
+			var fightLabel = UiFactory.CreateText("Label", fightObject.transform, null, "전투하기", 32, Color.white, TextAnchor.MiddleCenter);
+			fightLabel.raycastTarget = false;
+
+			var capturedEnemy = enemy;
+			fightButton.onClick.AddListener(() => OnFight(capturedEnemy));
+		}
+		else
+		{
+			var lockObject = UiFactory.CreateImage("Lock", row.transform, new Color(0.2f, 0.2f, 0.24f, 1f));
+			var lockRect = (RectTransform)lockObject.transform;
+			lockRect.anchorMin = new Vector2(1f, 0.5f);
+			lockRect.anchorMax = new Vector2(1f, 0.5f);
+			lockRect.pivot = new Vector2(1f, 0.5f);
+			lockRect.sizeDelta = new Vector2(220f, 100f);
+			lockRect.anchoredPosition = new Vector2(-24f, 0f);
+			var lockLabel = UiFactory.CreateText("Label", lockObject.transform, null, "잠김", 30, new Color(0.6f, 0.62f, 0.68f, 1f), TextAnchor.MiddleCenter);
+			lockLabel.raycastTarget = false;
+		}
 	}
 
 	/// <summary>
@@ -319,13 +439,14 @@ public class BattleController : MonoBehaviour
 			return;
 		}
 
-		m_MessageText.text = "스테이지를 선택하세요 (전투당 활동력 " + ActivityCost + ")";
+		UpdateMessage();
 
 		BattleContext.PlayerLayout = m_ShipBuilder != null ? m_ShipBuilder.GetLayout() : new List<ModulePlacement>();
 		BattleContext.EnemyLayout = enemy.Layout;
 		BattleContext.EnemyName = enemy.Name;
 		BattleContext.EnemyPower = enemy.Power;
 		BattleContext.StageIndex = enemy.StageIndex;
+		BattleContext.ManualMove = m_PlayerState.ManualMove;
 		BattleContext.OnFinished = HandleFinished;
 
 		m_Busy = true;

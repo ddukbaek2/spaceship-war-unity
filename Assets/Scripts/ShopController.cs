@@ -13,6 +13,7 @@ public class ShopController : MonoBehaviour
 
 	private PlayerState m_PlayerState;
 	private Font m_Font;
+	private ScrollRect m_ScrollRect;
 
 	/// <summary>
 	/// 초기화됨.
@@ -75,17 +76,28 @@ public class ShopController : MonoBehaviour
 		var stride = CardHeight + CardSpacing;
 		content.sizeDelta = new Vector2(0f, topPad * 2f + definitions.Length * stride - CardSpacing);
 
-		var scrollRect = scrollViewObject.GetComponent<ScrollRect>();
-		scrollRect.content = content;
-		scrollRect.viewport = viewportRect;
-		scrollRect.horizontal = false;
-		scrollRect.vertical = true;
-		scrollRect.movementType = ScrollRect.MovementType.Elastic;
-		scrollRect.scrollSensitivity = 30f;
+		m_ScrollRect = scrollViewObject.GetComponent<ScrollRect>();
+		m_ScrollRect.content = content;
+		m_ScrollRect.viewport = viewportRect;
+		m_ScrollRect.horizontal = false;
+		m_ScrollRect.vertical = true;
+		m_ScrollRect.movementType = ScrollRect.MovementType.Elastic;
+		m_ScrollRect.scrollSensitivity = 30f;
 
 		for (int index = 0; index < definitions.Length; index++)
 		{
 			CreateCard(definitions[index], content, index, topPad, stride);
+		}
+	}
+
+	/// <summary>
+	/// 화면을 초기화한다(스크롤 맨 위).
+	/// </summary>
+	public void ResetView()
+	{
+		if (m_ScrollRect != null)
+		{
+			m_ScrollRect.verticalNormalizedPosition = 1f;
 		}
 	}
 

@@ -3,7 +3,7 @@
 > 이 문서는 세션이 끊어져도 게임 기획 / 구조 / 설계가 보존되도록 유지하는 단일 기준 문서입니다.
 > 새 작업을 시작할 때 항상 이 문서를 먼저 읽고, 설계가 바뀌면 이 문서를 갱신합니다.
 
-최종 갱신: 2026-06-17
+최종 갱신: 2026-06-23
 
 ---
 
@@ -152,6 +152,46 @@ UI
   - **전투 고도화**: 정면(+Z) 추진/회전(추진체 수 ∝ 이동·회전), 무기 전방 빔 발사, **모듈 비주얼 `ModuleVisual`**(무기=전방 빔포/추진체=후방 부스터·분사/장갑=상판), **블록별 체력 HUD**(uGUI 추적, 만피 숨김), 1m 격자 기준 효과.
   - **모듈 시스템 기준 문서 `ITEMMODULE.md` 신규 작성**(격자/정면/종류/인벤토리/장착/비주얼/전투 규칙). 모듈 관련 작업은 이 문서를 기준으로 한다.
 
+- 2026-06-23
+  - **전투 수동 이동(가상 조이스틱) 추가**: `VirtualJoystick`(uGUI, 방향 -1~1 제공). `PlayerState.ManualMove`(저장 영속) ↔ 설정 탭 토글 버튼(`MainUi.ToggleMoveMode`, "전투 이동: 자동/수동"). `BattleContext.ManualMove`로 전투씬 전달 → `BattleManager`가 수동일 때 화면 하단 중앙 조이스틱 생성·매 프레임 입력 전달, `BattleShip.SetManualControl`/`SetMoveInput`로 입력 방향 전진/회전(자동 추격 대체).
+  - **전투력 산정 통합**: `ModuleCatalog.ComputePower`(코어 기본 `CorePower=10` + 모듈별 `Attack*4+Health+Armor*3+Speed*5`)로 일원화. `InventoryView`/`BattleController`의 중복 계산 제거.
+  - **스테이지 난이도 티어화**: `BattleController`가 스테이지가 오를수록 모듈 수 증가 + 약→강 티어 풀(`s_StageTiers`)에서 적 모듈 추첨. 전투 목록에 누적 승리 표시(`PlayerState.Wins`).
+  - **개조 강조 효과**: `ShipBuilder`가 빈 슬롯·선택 장착 모듈을 깜빡임(이미션 펄스)으로 강조.
+  - WebGL2 무압축 재빌드(`build/WebGL`, 약 79MB, 에러 0) → NAS 미러 배포(`\\DS216PLUSII\web\ddukbaek2\portfolio\spaceship-war-unity`).
+
+- 2026-06-24
+  - **전투 스테이지 순차 잠금**: `BattleController`가 스테이지를 `이전 스테이지 클리어 시 해금`(0번은 항상 해금)으로 처리. 잠긴 행은 어둡게 + `전투하기` 대신 `잠김` 표시(클릭 불가).
+  - **클리어 배지/버튼 겹침 수정**: `✔ 클리어` 배지를 `전투하기` 버튼 좌측으로 분리 배치(20px 간격)해 가림 해소.
+  - **활동력 자동 회복(분당 1)**: `PlayerState`가 마지막 기준 시각(`ActivityTimestamp`, UTC ticks 저장)으로부터 경과 분만큼 회복(최대치까지). 게임을 닫았다 열어도 경과 시간 반영. 가득이면 기준 시각만 현재로 유지.
+  - **설정에 `활동력 가득 채우기` 버튼 추가**: `PlayerState.FillActivity` → 즉시 최대치.
+  - **전투 화면에 `조작: 자동/수동` 토글 버튼 추가**(나가기 버튼 왼쪽): 전투 중 바로 우주선 조작을 **자동 추격 ↔ 조이스틱 수동**으로 전환하고 조이스틱 표시를 함께 토글. 값은 `PlayerState`에 저장(설정 탭과 동기화). **카메라 드래그 패닝은 모드와 무관하게 항상 동작**(우주선 이동≠카메라 이동). 조이스틱은 항상 생성하되 수동일 때만 표시.
+  - **조이스틱 원형화**: `UiSprite.Circle`(절차 생성 흰색 원, 가장자리 안티에일리어싱, 캐시) 추가. 조이스틱 배경/핸들을 원형 스프라이트(`Image.type=Simple`)로 표시.
+  - **화면 드래그 ↔ 조이스틱 분리**: `BattleCameraController`가 누름 **시작 시점**에 UI 위 여부(`IsOverUi`)를 판정해 그 누름이 끝날 때까지 카메라 패닝을 무시. (기존엔 시작 판정만 해서, 조이스틱 위에서 누른 채 포인터가 밖으로 나가면 카메라가 따라 움직이던 버그 수정.)
+  - 재빌드·NAS 재배포(4회).
+
+- 2026-06-27
+  - **별 우주 스카이박스**: 절차 생성한 별 큐브맵 + `Skybox/Cubemap` 머티리얼을 `Assets/Resources/Skybox/`(Starfield.cubemap, StarfieldSkybox.mat) 에셋으로 굳힘(WebGL 셰이더 스트리핑 방지). `SkyboxFactory.Apply()`가 `RenderSettings.skybox`로 적용. 메인 카메라(`ShipCameraController`)와 전투 카메라(`BattleManager`)의 Clear Flags 를 Skybox 로 변경. 전투 배경 구체(`Modules/Skydome` 인스턴스화)는 스카이박스로 대체하며 제거(프리팹 에셋은 잔존 — 미사용). 별무리 피드백으로 512px·조밀(작은별 1400/중간 80/큰 14 per face, 밝기·색 다양성)로 재생성.
+  - **레이저 발사체(블룸+파티클)**: `BattleProjectile`을 세장형 빛나는 코어(HDR 이미션 ×6) + `TrailRenderer` 잔상 + `ParticleSystem` 스파크로 재구성. 전투 카메라 post-processing 활성 + 전역 `Bloom` 볼륨(`BattleManager.BuildPostProcessing`)으로 레이저가 빛나게. (메인 씬 Global Volume 덕분에 URP post 셰이더가 빌드에 포함됨.)
+  - 재빌드·NAS 재배포(2회).
+  - **밸런스 테이블 엑셀→JSON 파이프라인**: `Assets/Tables/Modules.xlsx`·`Stages.xlsx`(엑셀 편집) → `tools/tables_to_json.py`(openpyxl) → `Assets/Resources/Tables/Modules.json`·`Stages.json`. 초기 엑셀은 `tools/gen_tables_xlsx.py`로 생성. 런타임은 `ModuleCatalog`(JSON 우선 → ModuleTable SO → 기본값), `BattleController.LoadStageRows`(JSON 우선 → 기본값)가 JSON을 읽음. 모듈 Type/Category는 enum 문자열, 색은 hex(`#RRGGBBAA`)로 표기. 스테이지 행: Index/EnemyName/ModuleCount/MaxTier/Seed.
+  - **별 스카이박스 가는 점 재조정**: 글로우/큰 별 제거, 1px 점 위주(면당 2600개, Point 필터)로 더 가늘고 넓게 분포.
+  - 재빌드·NAS 재배포.
+
+- 2026-06-27 (2차)
+  - **동력(전력) 시스템 + 동력로 모듈 1종(`ReactorCore`)**: 새 카테고리 `Reactor`. 동력로가 동력을 공급(`PowerSupply`), 무기/추진체가 소비(`PowerCost`). 모듈 테이블에 `PowerSupply`/`PowerCost` 컬럼 추가, 코어 기본 공급 `CorePowerSupply=6`. 총 공급 < 소비면 **부족분만 일부 정지**(코어에서 가까운 소비 모듈부터 켜고 예산 초과분 비활성, `ModuleCatalog.ComputeActive`). 전투(`BattleShip`)는 **플레이어 함선만** 적용 — 비활성 무기 미발사·비활성 추진체 추진 제외·비활성 모듈 흐리게. 인벤토리 헤더에 `동력 소비/공급` 표시. `ReactorCore.prefab`은 중장갑 프리팹 복제 + 청록 머티리얼. 기본 지급 10종(동력로 포함).
+  - **하단 메뉴 6탭화**: 개조/상점/스테이지/**모험**/**이벤트**/설정. 모험·이벤트는 런타임 생성 '준비 중' 플레이스홀더. `MainUi`가 탭/화면을 균등(1/6) 재배치(씬 미존재 탭은 버튼 복제·화면 생성).
+  - **기본 진입 탭 = 스테이지**(`DefaultScreenIndex=2`).
+  - **메뉴 전환 시 화면 초기화**: `MainUi.ResetActiveScreen` → 개조(카메라 팬/거리 복귀 `ShipCameraController.ResetView` + 인벤토리 스크롤 top), 상점/스테이지 스크롤 top(+목록 갱신).
+  - **카메라 2배 멀리**: 개조(`ShipCameraController` 초기 거리 ×2, MaxDistance 확장), 전투(`BattleManager` 카메라 (0,40,-20)).
+  - **별 개수 1/3**(면당 730), 더 흐리게(exposure 0.85, 밝기 분포 r³).
+  - 재빌드·NAS 재배포.
+
+- 2026-06-28~29
+  - **하단 네비 씬에 정식 6탭 배치**: 런타임 복제 폐기. 씬(`Scene.unity`)에 `NavButton_모험`/`이벤트` + `Screen_모험`/`이벤트` 추가, 버튼 사각 이미지. `MainUi`는 씬 오브젝트를 그대로 사용(생성 로직 제거).
+  - **설정/우편함을 상단 우측 아이콘으로 이동**: 하단 설정 탭 제거(하단 5탭: 개조/상점/스테이지/모험/이벤트, 5등분). `TopIcons` 컨테이너에 설정(⚙)·우편함(✉) 아이콘 버튼(우상단 세로). 클릭 시 전체 화면 전환(`Screen_설정`/`Screen_우편함`). `MainUi`는 화면 7개 + 하단 5/상단 2 버튼을 통합 관리(앞 5는 라벨 교체, 뒤 2는 글리프 유지). 우편함은 '준비 중' 플레이스홀더.
+  - **동력로 전용 외형**: `ReactorCore.prefab`을 베이스(어두운 금속) + 금속 하우징(실린더) + 청록 발광 에너지 코어(구체, HDR 이미션)로 재구성.
+  - 재빌드·NAS 재배포.
+
 ## 7. 게임 루프 로드맵 (목표 설계)
 
 사용자 의도에 따른 전체 흐름. 단계별로 구현한다.
@@ -159,7 +199,7 @@ UI
 1. **상점(상점 탭)**: 물건(모듈)을 재화로 구매 → **개조 탭의 인벤토리**에 모듈이 축적된다.
 2. **개조(개조 탭)**: 인벤토리의 모듈을 **드래그**해서 함선의 빈 칸(슬롯)에 부착한다. (현재는 슬롯 탭=즉시 부착 / 추후 드래그-부착으로 확장)
 3. **전투 목록(전투 탭)**: **스크롤뷰**로 대결 가능한 다른 우주선 목록 표시. "대결하기"를 누르면 **활동력 소모** → 전투 화면으로 전환.
-4. **전투**: 자동 전투 연출. 결과 — 승리=**경험치+재화** 획득 / 패배=무보상. (전투당 활동력 **10** 소모, 자동 회복 없음)
+4. **전투**: 자동 전투 연출. 결과 — 승리=**경험치+재화** 획득 / 패배=무보상. (전투당 활동력 **10** 소모, **분당 1 자동 회복** + 설정에서 즉시 충전)
 
 ### 전투 상세 설계 (자동 전투 연출)
 - 시점: 전투 화면. **플레이어 함선은 제자리에서 둥둥 떠다니고**, 적 함선이 다가온다.

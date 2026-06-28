@@ -17,6 +17,8 @@ public class ModuleRow
 	public int Armor;
 	public int Speed;
 	public int Range;
+	public int PowerSupply;
+	public int PowerCost;
 	public Color Color = Color.white;
 }
 

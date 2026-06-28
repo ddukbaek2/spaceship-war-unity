@@ -14,7 +14,7 @@ public class BattleProjectile : MonoBehaviour
 	private float m_Life;
 
 	/// <summary>
-	/// 투사체를 발사한다.
+	/// 레이저 투사체를 발사한다(세장형 빛나는 코어 + 트레일 + 파티클 스파크).
 	/// </summary>
 	public void Launch(Vector3 start, Vector3 direction, BattleShip targetShip, float damage, float speed, float thickness, Color color)
 	{
@@ -25,16 +25,80 @@ public class BattleProjectile : MonoBehaviour
 		m_Life = 2.5f;
 
 		transform.position = start;
-		transform.localScale = new Vector3(thickness, thickness, 0.7f);
 		transform.rotation = Quaternion.LookRotation(m_Direction, Vector3.up);
 
-		var collider = GetComponent<Collider>();
+		BuildCore(thickness, color);
+		BuildTrail(thickness, color);
+		BuildSparks(thickness, color);
+	}
+
+	/// <summary>
+	/// 레이저 코어(세장형 빛나는 큐브)를 만든다.
+	/// </summary>
+	private void BuildCore(float thickness, Color color)
+	{
+		var core = GameObject.CreatePrimitive(PrimitiveType.Cube);
+		core.name = "Core";
+		var collider = core.GetComponent<Collider>();
 		if (collider != null)
 		{
 			Destroy(collider);
 		}
 
-		GetComponent<Renderer>().material = MaterialFactory.CreateLit(color, color * 2.2f, 0f, 0.5f, false);
+		core.transform.SetParent(transform, false);
+		core.transform.localPosition = Vector3.zero;
+		core.transform.localScale = new Vector3(thickness, thickness, 1.8f);
+		var emission = color * 6f;
+		core.GetComponent<Renderer>().material = MaterialFactory.CreateLit(color, emission, 0f, 0.6f, false);
+	}
+
+	/// <summary>
+	/// 레이저 잔상 트레일을 만든다.
+	/// </summary>
+	private void BuildTrail(float thickness, Color color)
+	{
+		var trail = gameObject.AddComponent<TrailRenderer>();
+		trail.time = 0.16f;
+		trail.startWidth = thickness * 1.7f;
+		trail.endWidth = 0f;
+		trail.numCapVertices = 4;
+		trail.minVertexDistance = 0.05f;
+		trail.material = MaterialFactory.CreateLit(color, color * 4f, 0f, 0.5f, false);
+
+		var gradient = new Gradient();
+		var colorKeys = new GradientColorKey[] { new GradientColorKey(color, 0f), new GradientColorKey(color, 1f) };
+		var alphaKeys = new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) };
+		gradient.SetKeys(colorKeys, alphaKeys);
+		trail.colorGradient = gradient;
+	}
+
+	/// <summary>
+	/// 궤적을 따라 흩어지는 파티클 스파크를 만든다.
+	/// </summary>
+	private void BuildSparks(float thickness, Color color)
+	{
+		var sparkObject = new GameObject("Spark");
+		sparkObject.transform.SetParent(transform, false);
+		sparkObject.transform.localPosition = Vector3.zero;
+
+		var particle = sparkObject.AddComponent<ParticleSystem>();
+		var main = particle.main;
+		main.startLifetime = 0.28f;
+		main.startSpeed = 0.4f;
+		main.startSize = thickness * 1.3f;
+		main.startColor = color;
+		main.simulationSpace = ParticleSystemSimulationSpace.World;
+		main.maxParticles = 80;
+
+		var emission = particle.emission;
+		emission.rateOverTime = 70f;
+
+		var shape = particle.shape;
+		shape.shapeType = ParticleSystemShapeType.Sphere;
+		shape.radius = thickness * 0.5f;
+
+		var particleRenderer = sparkObject.GetComponent<ParticleSystemRenderer>();
+		particleRenderer.material = MaterialFactory.CreateLit(color, color * 5f, 0f, 0.5f, false);
 	}
 
 	/// <summary>

@@ -19,7 +19,6 @@ public class ShipBuilder : MonoBehaviour
 	[SerializeField] private bool m_AutoSpin = false;
 	[SerializeField] private float m_SpinSpeed = 6f;
 	[SerializeField] private Color m_CoreColor = new Color(0.16f, 0.7f, 0.72f, 1f);
-	[SerializeField] private Color m_SlotColor = new Color(0.7f, 0.85f, 1f, 0.35f);
 	#endregion
 
 	private static readonly Vector2Int[] s_Directions = new Vector2Int[]
@@ -40,6 +39,14 @@ public class ShipBuilder : MonoBehaviour
 
 	private readonly Dictionary<GameObject, CellReference> m_CellByObject = new Dictionary<GameObject, CellReference>();
 	private readonly List<GameObject> m_SlotObjects = new List<GameObject>();
+
+	private static readonly Color s_SlotBaseColor = new Color(0.25f, 1f, 0.4f, 1f);
+	private static readonly Color s_SlotEmissionColor = new Color(0.15f, 0.85f, 0.3f, 1f);
+	private static readonly Color s_FocusEmissionColor = new Color(1f, 0.95f, 0.4f, 1f);
+
+	private GameObject m_FocusObject;
+	private Renderer[] m_FocusRenderers;
+	private MaterialPropertyBlock m_FocusBlock;
 
 	private Vector3 m_BasePosition;
 	private Camera m_Camera;
@@ -86,6 +93,57 @@ public class ShipBuilder : MonoBehaviour
 		}
 
 		HandlePointer();
+		PulseEffects();
+	}
+
+	/// <summary>
+	/// 장착 가능한 슬롯과 선택된 장착 모듈을 깜빡이게 강조한다.
+	/// </summary>
+	private void PulseEffects()
+	{
+		var pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 5f);
+
+		for (int index = 0; index < m_SlotObjects.Count; index++)
+		{
+			var renderer = m_SlotObjects[index].GetComponent<Renderer>();
+			if (!renderer.enabled)
+			{
+				continue;
+			}
+
+			var material = renderer.material;
+			if (material.HasProperty("_BaseColor"))
+			{
+				var color = s_SlotBaseColor;
+				color.a = Mathf.Lerp(0.2f, 0.55f, pulse);
+				material.SetColor("_BaseColor", color);
+			}
+
+			if (material.HasProperty("_EmissionColor"))
+			{
+				material.SetColor("_EmissionColor", s_SlotEmissionColor * Mathf.Lerp(0.3f, 1.3f, pulse));
+			}
+		}
+
+		if (m_FocusObject != null && m_FocusRenderers != null)
+		{
+			var focusPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 6.5f);
+			var emission = s_FocusEmissionColor * Mathf.Lerp(0.1f, 1.4f, focusPulse);
+			for (int index = 0; index < m_FocusRenderers.Length; index++)
+			{
+				if (m_FocusRenderers[index] == null)
+				{
+					continue;
+				}
+
+				m_FocusRenderers[index].GetPropertyBlock(m_FocusBlock);
+				m_FocusBlock.SetColor("_EmissionColor", emission);
+				m_FocusRenderers[index].SetPropertyBlock(m_FocusBlock);
+			}
+
+			var scale = 1f + 0.06f * focusPulse;
+			m_FocusObject.transform.localScale = new Vector3(scale, scale, scale);
+		}
 	}
 
 	/// <summary>
@@ -160,10 +218,28 @@ public class ShipBuilder : MonoBehaviour
 
 		CreateCore();
 
+		var focusCoordinate = s_CoreCell;
+		var hasFocus = false;
+		if (m_PlayerState != null && m_PlayerState.SelectedId != -1)
+		{
+			var selected = m_PlayerState.GetModule(m_PlayerState.SelectedId);
+			if (selected != null && selected.Equipped)
+			{
+				focusCoordinate = selected.Coordinate;
+				hasFocus = true;
+			}
+		}
+
 		var equipped = m_PlayerState != null ? m_PlayerState.GetEquipped() : new List<ModulePlacement>();
 		foreach (var placement in equipped)
 		{
-			CreateModule(placement.Coordinate, placement.Type);
+			var moduleRoot = CreateModule(placement.Coordinate, placement.Type);
+			if (hasFocus && placement.Coordinate == focusCoordinate && moduleRoot != null)
+			{
+				m_FocusObject = moduleRoot;
+				m_FocusRenderers = moduleRoot.GetComponentsInChildren<Renderer>();
+				m_FocusBlock = new MaterialPropertyBlock();
+			}
 		}
 
 		CreateConnectors(equipped);
@@ -312,18 +388,19 @@ public class ShipBuilder : MonoBehaviour
 	/// <summary>
 	/// 모듈을 생성한다.
 	/// </summary>
-	private void CreateModule(Vector2Int coordinate, ModuleType type)
+	private GameObject CreateModule(Vector2Int coordinate, ModuleType type)
 	{
 		var root = ModuleFactory.CreateModule(type, transform, ToLocal(coordinate));
 		if (root == null)
 		{
-			return;
+			return null;
 		}
 
 		var cellReference = new CellReference();
 		cellReference.Coordinate = coordinate;
 		cellReference.IsSlot = false;
 		m_CellByObject.Add(root, cellReference);
+		return root;
 	}
 
 	/// <summary>
@@ -331,7 +408,9 @@ public class ShipBuilder : MonoBehaviour
 	/// </summary>
 	private void CreateSlot(Vector2Int coordinate)
 	{
-		var slotMaterial = CreateLitMaterial(m_SlotColor, Color.black, 0f, 0.3f, true);
+		var slotColor = new Color(0.25f, 1f, 0.4f, 0.42f);
+		var slotEmission = new Color(0.15f, 0.85f, 0.3f, 1f);
+		var slotMaterial = CreateLitMaterial(slotColor, slotEmission, 0f, 0.5f, true);
 		var slotObject = CreateCell("Slot", coordinate, m_SlotHeight, 0.92f, slotMaterial, true);
 		m_SlotObjects.Add(slotObject);
 	}
@@ -401,5 +480,7 @@ public class ShipBuilder : MonoBehaviour
 
 		m_CellByObject.Clear();
 		m_SlotObjects.Clear();
+		m_FocusObject = null;
+		m_FocusRenderers = null;
 	}
 }

@@ -17,6 +17,7 @@ public class ShipCameraController : MonoBehaviour
 	[SerializeField] private float m_MaxDistance = 16f;
 	[SerializeField] private float m_PanSpeed = 0.01f;
 	[SerializeField] private float m_MaxPan = 6f;
+	[SerializeField] private Vector3 m_FramingOffset = new Vector3(0f, 0f, -2.6f);
 	#endregion
 
 	/// <summary>
@@ -45,6 +46,11 @@ public class ShipCameraController : MonoBehaviour
 	private float m_Distance;
 
 	/// <summary>
+	/// 초기 거리(초기화 시 복귀 기준).
+	/// </summary>
+	private float m_InitialDistance;
+
+	/// <summary>
 	/// 직전 프레임의 두 손가락 거리(핀치 계산용).
 	/// </summary>
 	private float m_PreviousPinchDistance;
@@ -54,10 +60,31 @@ public class ShipCameraController : MonoBehaviour
 	/// </summary>
 	private void Start()
 	{
+		var camera = GetComponent<Camera>();
+		if (camera != null)
+		{
+			camera.clearFlags = CameraClearFlags.Skybox;
+		}
+
+		SkyboxFactory.Apply();
+
 		var targetPosition = GetTargetPosition();
 		var offset = transform.position - targetPosition;
-		m_Distance = offset.magnitude;
+		m_Distance = offset.magnitude * 2f;
 		m_Direction = offset.normalized;
+		m_InitialDistance = m_Distance;
+		m_MaxDistance = Mathf.Max(m_MaxDistance, m_Distance);
+		ApplyDistance();
+	}
+
+	/// <summary>
+	/// 시점을 초기 상태(팬 0, 초기 거리)로 되돌린다.
+	/// </summary>
+	public void ResetView()
+	{
+		m_PanOffset = Vector3.zero;
+		m_Distance = m_InitialDistance;
+		ApplyDistance();
 	}
 
 	/// <summary>
@@ -183,7 +210,7 @@ public class ShipCameraController : MonoBehaviour
 	{
 		var targetPosition = GetTargetPosition();
 		transform.position = targetPosition + m_Direction * m_Distance;
-		transform.LookAt(targetPosition);
+		transform.LookAt(targetPosition + m_FramingOffset);
 	}
 
 	/// <summary>

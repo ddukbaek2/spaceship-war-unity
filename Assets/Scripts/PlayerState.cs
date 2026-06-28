@@ -46,12 +46,18 @@ public class PlayerState : MonoBehaviour
 		public int[] CoordX;
 		public int[] CoordY;
 		public int[] ClearedStages;
+		public int Wins;
+		public bool ManualMove;
+		public long ActivityTimestamp;
 	}
 
 	private readonly List<ModuleInstance> m_Modules = new List<ModuleInstance>();
 	private readonly List<int> m_ClearedStages = new List<int>();
 	private int m_NextModuleId = 1;
 	private int m_SelectedId = -1;
+	private int m_Wins;
+	private bool m_ManualMove;
+	private long m_ActivityTimestampTicks;
 	private bool m_SuppressSave;
 
 	/// <summary>
@@ -77,6 +83,12 @@ public class PlayerState : MonoBehaviour
 	/// <summary> 선택된 모듈 식별자(-1: 없음). </summary>
 	public int SelectedId { get { return m_SelectedId; } }
 
+	/// <summary> 누적 전투 승리 횟수. </summary>
+	public int Wins { get { return m_Wins; } }
+
+	/// <summary> 전투 수동 이동 설정 여부. </summary>
+	public bool ManualMove { get { return m_ManualMove; } }
+
 	/// <summary> 보유 모듈 목록. </summary>
 	public IReadOnlyList<ModuleInstance> Modules { get { return m_Modules; } }
 
@@ -91,7 +103,7 @@ public class PlayerState : MonoBehaviour
 		}
 
 		m_SuppressSave = true;
-		for (int type = 0; type < 9; type++)
+		for (int type = 0; type < 10; type++)
 		{
 			for (int count = 0; count < 2; count++)
 			{
@@ -99,8 +111,17 @@ public class PlayerState : MonoBehaviour
 			}
 		}
 
+		m_ActivityTimestampTicks = DateTime.UtcNow.Ticks;
 		m_SuppressSave = false;
 		Save();
+	}
+
+	/// <summary>
+	/// 매 프레임 경과 시간만큼 활동력을 회복한다.
+	/// </summary>
+	private void Update()
+	{
+		RecoverActivity();
 	}
 
 	/// <summary>
@@ -349,6 +370,64 @@ public class PlayerState : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 활동력 회복 간격(분당 1 회복).
+	/// </summary>
+	private const int ActivityRecoverMinutes = 1;
+
+	/// <summary>
+	/// 마지막 기준 시각으로부터 경과한 분만큼 활동력을 회복한다(최대치까지).
+	/// 가득 차 있으면 기준 시각만 현재로 맞춘다. 게임을 닫았다 열어도 경과 시간이 반영된다.
+	/// </summary>
+	private void RecoverActivity()
+	{
+		var nowTicks = DateTime.UtcNow.Ticks;
+		if (m_Activity >= m_MaxActivity)
+		{
+			m_ActivityTimestampTicks = nowTicks;
+			return;
+		}
+
+		var elapsedTicks = nowTicks - m_ActivityTimestampTicks;
+		if (elapsedTicks <= 0)
+		{
+			return;
+		}
+
+		var intervalTicks = TimeSpan.TicksPerMinute * ActivityRecoverMinutes;
+		var gained = (int)(elapsedTicks / intervalTicks);
+		if (gained <= 0)
+		{
+			return;
+		}
+
+		m_Activity = Mathf.Min(m_MaxActivity, m_Activity + gained);
+		m_ActivityTimestampTicks += (long)gained * intervalTicks;
+		if (m_Activity >= m_MaxActivity)
+		{
+			m_ActivityTimestampTicks = nowTicks;
+		}
+
+		Save();
+		RaiseChanged();
+	}
+
+	/// <summary>
+	/// 활동력을 최대치로 채운다(설정 메뉴용).
+	/// </summary>
+	public void FillActivity()
+	{
+		if (m_Activity >= m_MaxActivity)
+		{
+			return;
+		}
+
+		m_Activity = m_MaxActivity;
+		m_ActivityTimestampTicks = DateTime.UtcNow.Ticks;
+		Save();
+		RaiseChanged();
+	}
+
+	/// <summary>
 	/// 스테이지를 클리어 처리한다.
 	/// </summary>
 	public void MarkStageCleared(int stageIndex)
@@ -376,6 +455,7 @@ public class PlayerState : MonoBehaviour
 	/// </summary>
 	public void RegisterWin()
 	{
+		m_Wins += 1;
 		m_Experience += 1;
 		if (m_Experience >= m_Level)
 		{
@@ -383,6 +463,21 @@ public class PlayerState : MonoBehaviour
 			m_Level += 1;
 		}
 
+		Save();
+		RaiseChanged();
+	}
+
+	/// <summary>
+	/// 전투 수동 이동 설정을 변경한다.
+	/// </summary>
+	public void SetManualMove(bool manual)
+	{
+		if (m_ManualMove == manual)
+		{
+			return;
+		}
+
+		m_ManualMove = manual;
 		Save();
 		RaiseChanged();
 	}
@@ -432,6 +527,9 @@ public class PlayerState : MonoBehaviour
 		}
 
 		data.ClearedStages = m_ClearedStages.ToArray();
+		data.Wins = m_Wins;
+		data.ManualMove = m_ManualMove;
+		data.ActivityTimestamp = m_ActivityTimestampTicks;
 
 		PlayerPrefs.SetString(SaveKey, JsonUtility.ToJson(data));
 		PlayerPrefs.Save();
@@ -479,6 +577,10 @@ public class PlayerState : MonoBehaviour
 				m_ClearedStages.Add(data.ClearedStages[index]);
 			}
 		}
+
+		m_Wins = data.Wins;
+		m_ManualMove = data.ManualMove;
+		m_ActivityTimestampTicks = data.ActivityTimestamp != 0 ? data.ActivityTimestamp : DateTime.UtcNow.Ticks;
 
 		return true;
 	}

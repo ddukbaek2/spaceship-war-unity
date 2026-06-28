@@ -1,0 +1,60 @@
+{
+  "rows": [
+    {
+      "Index": 0,
+      "EnemyName": "붉은 약탈자",
+      "ModuleCount": 1,
+      "MaxTier": 0,
+      "Seed": 7919
+    },
+    {
+      "Index": 1,
+      "EnemyName": "검은 유성",
+      "ModuleCount": 2,
+      "MaxTier": 0,
+      "Seed": 8050
+    },
+    {
+      "Index": 2,
+      "EnemyName": "강철 전갈",
+      "ModuleCount": 3,
+      "MaxTier": 0,
+      "Seed": 8181
+    },
+    {
+      "Index": 3,
+      "EnemyName": "녹빛 추적자",
+      "ModuleCount": 4,
+      "MaxTier": 1,
+      "Seed": 8312
+    },
+    {
+      "Index": 4,
+      "EnemyName": "푸른 망령",
+      "ModuleCount": 5,
+      "MaxTier": 1,
+      "Seed": 8443
+    },
+    {
+      "Index": 5,
+      "EnemyName": "황금 독수리",
+      "ModuleCount": 6,
+      "MaxTier": 1,
+      "Seed": 8574
+    },
+    {
+      "Index": 6,
+      "EnemyName": "심연의 포식자",
+      "ModuleCount": 7,
+      "MaxTier": 2,
+      "Seed": 8705
+    },
+    {
+      "Index": 7,
+      "EnemyName": "은빛 칼날",
+      "ModuleCount": 8,
+      "MaxTier": 2,
+      "Seed": 8836
+    }
+  ]
+}

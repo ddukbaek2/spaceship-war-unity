@@ -16,7 +16,8 @@ public class BattleCameraController : MonoBehaviour
 	private Vector3 m_BasePosition;
 	private Vector3 m_TargetOffset;
 	private Vector2 m_PreviousPointer;
-	private bool m_Dragging;
+	private bool m_PressActive;
+	private bool m_IgnorePress;
 
 	/// <summary>
 	/// 초기화됨.
@@ -37,22 +38,28 @@ public class BattleCameraController : MonoBehaviour
 			var isPressed = pointer.press.isPressed;
 			var position = pointer.position.ReadValue();
 
-			if (isPressed && !m_Dragging && !IsOverUi())
+			if (isPressed && !m_PressActive)
 			{
-				m_Dragging = true;
+				m_PressActive = true;
+				m_IgnorePress = IsOverUi();
 				m_PreviousPointer = position;
 			}
-			else if (isPressed && m_Dragging)
+			else if (isPressed && m_PressActive)
 			{
-				var delta = position - m_PreviousPointer;
+				if (!m_IgnorePress)
+				{
+					var delta = position - m_PreviousPointer;
+					m_TargetOffset += new Vector3(-delta.x, 0f, -delta.y) * m_PanSpeed;
+					m_TargetOffset.x = Mathf.Clamp(m_TargetOffset.x, -m_MaxPan, m_MaxPan);
+					m_TargetOffset.z = Mathf.Clamp(m_TargetOffset.z, -m_MaxPan, m_MaxPan);
+				}
+
 				m_PreviousPointer = position;
-				m_TargetOffset += new Vector3(-delta.x, 0f, -delta.y) * m_PanSpeed;
-				m_TargetOffset.x = Mathf.Clamp(m_TargetOffset.x, -m_MaxPan, m_MaxPan);
-				m_TargetOffset.z = Mathf.Clamp(m_TargetOffset.z, -m_MaxPan, m_MaxPan);
 			}
 			else if (!isPressed)
 			{
-				m_Dragging = false;
+				m_PressActive = false;
+				m_IgnorePress = false;
 			}
 		}
 

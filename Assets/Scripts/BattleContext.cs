@@ -44,6 +44,11 @@ public static class BattleContext
 	public static int StageIndex;
 
 	/// <summary>
+	/// 플레이어 함선 수동 이동 여부.
+	/// </summary>
+	public static bool ManualMove;
+
+	/// <summary>
 	/// 승리 여부.
 	/// </summary>
 	public static bool ResultPlayerWon;

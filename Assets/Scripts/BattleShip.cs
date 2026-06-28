@@ -57,6 +57,10 @@ public class BattleShip : MonoBehaviour
 	private float m_FireCooldown;
 	private float m_BobPhase;
 
+	private bool m_ManualControl;
+	private Vector2 m_MoveInput;
+	private HashSet<Vector2Int> m_ActiveModules;
+
 	/// <summary>
 	/// 함선 생존 여부(코어 생존).
 	/// </summary>
@@ -88,6 +92,8 @@ public class BattleShip : MonoBehaviour
 
 		m_BobPhase = isEnemy ? 1.7f : 0f;
 
+		m_ActiveModules = isEnemy ? null : ModuleCatalog.ComputeActive(layout);
+
 		var engineCount = 0;
 		if (layout != null)
 		{
@@ -107,7 +113,12 @@ public class BattleShip : MonoBehaviour
 				CreateBar(out moduleData.BarRoot, out moduleData.BarFill, new Color(1f, 0.7f, 0.4f, 1f));
 				m_Modules[placement.Coordinate] = moduleData;
 
-				if (ModuleCatalog.GetCategory(placement.Type) == ModuleCategory.Engine)
+				if (!IsModuleActive(placement.Coordinate))
+				{
+					TintEmission(moduleData.Object, new Color(0.22f, 0.22f, 0.26f, 1f));
+				}
+
+				if (ModuleCatalog.GetCategory(placement.Type) == ModuleCategory.Engine && IsModuleActive(placement.Coordinate))
 				{
 					engineCount++;
 				}
@@ -119,11 +130,35 @@ public class BattleShip : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 모듈이 동력으로 작동 중인지 확인한다(적은 항상 작동).
+	/// </summary>
+	private bool IsModuleActive(Vector2Int coordinate)
+	{
+		return m_ActiveModules == null || m_ActiveModules.Contains(coordinate);
+	}
+
+	/// <summary>
 	/// 상대 함선을 지정한다.
 	/// </summary>
 	public void SetOpponent(BattleShip opponent)
 	{
 		m_Opponent = opponent;
+	}
+
+	/// <summary>
+	/// 수동 조작 여부를 설정한다(켜면 조이스틱 입력으로 이동).
+	/// </summary>
+	public void SetManualControl(bool manual)
+	{
+		m_ManualControl = manual;
+	}
+
+	/// <summary>
+	/// 수동 이동 입력을 설정한다(x: 가로, y: 세로).
+	/// </summary>
+	public void SetMoveInput(Vector2 input)
+	{
+		m_MoveInput = input;
 	}
 
 	/// <summary>
@@ -136,7 +171,14 @@ public class BattleShip : MonoBehaviour
 			var toOpponent = m_Opponent.transform.position - transform.position;
 			toOpponent.y = 0f;
 			var distance = toOpponent.magnitude;
-			MoveAndFace(toOpponent, distance);
+			if (m_ManualControl)
+			{
+				ManualMove();
+			}
+			else
+			{
+				MoveAndFace(toOpponent, distance);
+			}
 
 			if (distance <= m_DetectionRange)
 			{
@@ -182,6 +224,26 @@ public class BattleShip : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 조이스틱 입력으로 이동/회전한다(입력 방향으로 정면을 돌리고 전진).
+	/// </summary>
+	private void ManualMove()
+	{
+		var input = new Vector3(m_MoveInput.x, 0f, m_MoveInput.y);
+		var magnitude = Mathf.Clamp01(input.magnitude);
+		if (magnitude > 0.05f)
+		{
+			var desired = input.normalized;
+			var targetRotation = Quaternion.LookRotation(desired, Vector3.up);
+			transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, m_TurnSpeed * Time.deltaTime);
+		}
+
+		var bob = Mathf.Sin(Time.time * 1.4f + m_BobPhase) * 0.12f;
+		var position = transform.position + transform.forward * m_MoveSpeed * magnitude * Time.deltaTime;
+		position.y = bob;
+		transform.position = position;
+	}
+
+	/// <summary>
 	/// 무기 모듈에서 전방(빈 공간)으로 빔을 발사한다. 무기가 없으면 코어가 약하게 사격한다.
 	/// </summary>
 	private void Fire()
@@ -190,6 +252,11 @@ public class BattleShip : MonoBehaviour
 		foreach (var moduleCell in m_Modules)
 		{
 			if (ModuleCatalog.GetCategory(moduleCell.Value.Type) != ModuleCategory.Weapon || moduleCell.Value.Object == null)
+			{
+				continue;
+			}
+
+			if (!IsModuleActive(moduleCell.Key))
 			{
 				continue;
 			}
@@ -212,8 +279,7 @@ public class BattleShip : MonoBehaviour
 	/// </summary>
 	private void SpawnProjectile(Vector3 start, Vector3 direction, float damage, float thickness, Color color)
 	{
-		var projectileObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-		projectileObject.name = "Beam";
+		var projectileObject = new GameObject("Laser");
 		var projectile = projectileObject.AddComponent<BattleProjectile>();
 		projectile.Launch(start, direction, m_Opponent, damage, 16f, thickness, color);
 	}

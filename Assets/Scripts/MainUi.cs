@@ -20,15 +20,30 @@ public class MainUi : MonoBehaviour
 	/// <summary>
 	/// 탭/화면 오브젝트 이름(좌→우 순서).
 	/// </summary>
-	private static readonly string[] s_ScreenNames = new string[] { "개조", "상점", "전투", "설정" };
+	private static readonly string[] s_ScreenNames = new string[] { "개조", "상점", "전투", "모험", "이벤트", "설정", "우편함" };
 
 	/// <summary>
 	/// 탭에 표시할 라벨(좌→우 순서). 오브젝트 이름과 별개로 화면 표기만 담당한다.
 	/// </summary>
-	private static readonly string[] s_DisplayNames = new string[] { "개조", "상점", "스테이지", "설정" };
+	private static readonly string[] s_DisplayNames = new string[] { "개조", "상점", "스테이지", "모험", "이벤트", "설정", "우편함" };
+
+	/// <summary>
+	/// 하단 탭 개수(앞 5개는 하단 네비, 이후는 상단 아이콘).
+	/// </summary>
+	private const int BottomTabCount = 5;
+
+	/// <summary>
+	/// 기본 진입 탭(스테이지).
+	/// </summary>
+	private const int DefaultScreenIndex = 2;
 
 	private PlayerState m_PlayerState;
 	private GameObject m_Ship;
+	private InventoryView m_Inventory;
+	private ShopController m_Shop;
+	private BattleController m_Battle;
+	private ShipCameraController m_ShipCamera;
+	private TMP_Text m_MoveModeLabel;
 	private TMP_Text m_LevelText;
 	private TMP_Text m_ExperienceText;
 	private TMP_Text m_ActivityText;
@@ -46,23 +61,46 @@ public class MainUi : MonoBehaviour
 		var canvasTransform = canvasObject.transform;
 		m_PlayerState = FindFirstObjectByType<PlayerState>();
 		m_Ship = GameObject.Find("Ship");
+		m_Inventory = FindFirstObjectByType<InventoryView>();
+		m_Shop = FindFirstObjectByType<ShopController>();
+		m_Battle = FindFirstObjectByType<BattleController>();
+		m_ShipCamera = FindFirstObjectByType<ShipCameraController>();
 
 		BuildTopHud(canvasTransform.Find("TopHud"));
 
 		var screensTransform = canvasTransform.Find("Screens");
 		var navigationTransform = canvasTransform.Find("BottomNavigation");
+		var topIconsTransform = canvasTransform.Find("TopIcons");
+
 		for (int index = 0; index < s_ScreenNames.Length; index++)
 		{
 			var screenName = s_ScreenNames[index];
 			var screenObject = screensTransform.Find("Screen_" + screenName).gameObject;
 			m_Screens.Add(screenObject);
 
-			var navButton = navigationTransform.Find("NavButton_" + screenName).GetComponent<Button>();
+			var navTransform = navigationTransform.Find("NavButton_" + screenName);
+			if (navTransform == null)
+			{
+				navTransform = topIconsTransform.Find("NavButton_" + screenName);
+			}
+
+			var navButton = navTransform.GetComponent<Button>();
 			m_NavButtons.Add(navButton);
-			var navLabel = ReplaceLabel(navButton.transform, s_DisplayNames[index], 40);
+
+			TMP_Text navLabel;
+			if (index < BottomTabCount)
+			{
+				navLabel = ReplaceLabel(navButton.transform, s_DisplayNames[index], 34);
+			}
+			else
+			{
+				navLabel = navButton.GetComponentInChildren<TMP_Text>();
+			}
+
 			m_NavLabels.Add(navLabel);
 
 			var capturedIndex = index;
+			navButton.onClick.RemoveAllListeners();
 			navButton.onClick.AddListener(() => SelectScreen(capturedIndex));
 		}
 
@@ -74,7 +112,7 @@ public class MainUi : MonoBehaviour
 		}
 
 		RefreshHud();
-		SelectScreen(0);
+		SelectScreen(DefaultScreenIndex);
 	}
 
 	/// <summary>
@@ -147,9 +185,78 @@ public class MainUi : MonoBehaviour
 			DestroyImmediate(settingsScreen.GetChild(index).gameObject);
 		}
 
-		UiFactory.CreateText("Title", settingsScreen, null, "설정", 80, new Color(0.85f, 0.88f, 0.95f, 1f), TextAnchor.MiddleCenter);
-		var note = UiFactory.CreateText("Note", settingsScreen, null, "준비 중", 36, new Color(0.5f, 0.52f, 0.58f, 1f), TextAnchor.MiddleCenter);
-		note.rectTransform.anchoredPosition = new Vector2(0f, -80f);
+		var title = UiFactory.CreateText("Title", settingsScreen, null, "설정", 80, new Color(0.85f, 0.88f, 0.95f, 1f), TextAnchor.UpperCenter);
+		var titleRect = title.rectTransform;
+		titleRect.anchorMin = new Vector2(0f, 1f);
+		titleRect.anchorMax = new Vector2(1f, 1f);
+		titleRect.pivot = new Vector2(0.5f, 1f);
+		titleRect.sizeDelta = new Vector2(0f, 120f);
+		titleRect.anchoredPosition = new Vector2(0f, -140f);
+
+		var moveModeButton = UiFactory.CreateImage("MoveModeButton", settingsScreen, new Color(0.2f, 0.42f, 0.48f, 1f));
+		var moveModeRect = (RectTransform)moveModeButton.transform;
+		moveModeRect.anchorMin = new Vector2(0.5f, 1f);
+		moveModeRect.anchorMax = new Vector2(0.5f, 1f);
+		moveModeRect.pivot = new Vector2(0.5f, 1f);
+		moveModeRect.sizeDelta = new Vector2(680f, 130f);
+		moveModeRect.anchoredPosition = new Vector2(0f, -360f);
+		moveModeButton.AddComponent<Button>().onClick.AddListener(ToggleMoveMode);
+		m_MoveModeLabel = UiFactory.CreateText("Label", moveModeButton.transform, null, "", 40, Color.white, TextAnchor.MiddleCenter);
+		m_MoveModeLabel.raycastTarget = false;
+
+		var fillButton = UiFactory.CreateImage("ActivityFillButton", settingsScreen, new Color(0.42f, 0.34f, 0.2f, 1f));
+		var fillRect = (RectTransform)fillButton.transform;
+		fillRect.anchorMin = new Vector2(0.5f, 1f);
+		fillRect.anchorMax = new Vector2(0.5f, 1f);
+		fillRect.pivot = new Vector2(0.5f, 1f);
+		fillRect.sizeDelta = new Vector2(680f, 130f);
+		fillRect.anchoredPosition = new Vector2(0f, -510f);
+		fillButton.AddComponent<Button>().onClick.AddListener(FillActivityNow);
+		var fillLabel = UiFactory.CreateText("Label", fillButton.transform, null, "활동력 가득 채우기", 40, Color.white, TextAnchor.MiddleCenter);
+		fillLabel.raycastTarget = false;
+
+		RefreshMoveModeLabel();
+	}
+
+	/// <summary>
+	/// 활동력을 최대치로 채운다.
+	/// </summary>
+	private void FillActivityNow()
+	{
+		if (m_PlayerState == null)
+		{
+			return;
+		}
+
+		m_PlayerState.FillActivity();
+	}
+
+	/// <summary>
+	/// 전투 이동 방식을 자동/수동으로 토글한다.
+	/// </summary>
+	private void ToggleMoveMode()
+	{
+		if (m_PlayerState == null)
+		{
+			return;
+		}
+
+		m_PlayerState.SetManualMove(!m_PlayerState.ManualMove);
+		RefreshMoveModeLabel();
+	}
+
+	/// <summary>
+	/// 전투 이동 방식 라벨을 갱신한다.
+	/// </summary>
+	private void RefreshMoveModeLabel()
+	{
+		if (m_MoveModeLabel == null)
+		{
+			return;
+		}
+
+		var manual = m_PlayerState != null && m_PlayerState.ManualMove;
+		m_MoveModeLabel.text = "전투 이동: " + (manual ? "수동 (조이스틱)" : "자동");
 	}
 
 	/// <summary>
@@ -171,6 +278,47 @@ public class MainUi : MonoBehaviour
 		if (m_Ship != null)
 		{
 			m_Ship.SetActive(activeIndex == 0);
+		}
+
+		ResetActiveScreen(activeIndex);
+	}
+
+	/// <summary>
+	/// 탭 진입 시 해당 화면의 상태(스크롤 위치/카메라/우주선 위치 등)를 초기화한다.
+	/// </summary>
+	private void ResetActiveScreen(int activeIndex)
+	{
+		if (activeIndex < 0 || activeIndex >= s_ScreenNames.Length)
+		{
+			return;
+		}
+
+		var screenName = s_ScreenNames[activeIndex];
+		if (screenName == "개조")
+		{
+			if (m_ShipCamera != null)
+			{
+				m_ShipCamera.ResetView();
+			}
+
+			if (m_Inventory != null)
+			{
+				m_Inventory.ResetView();
+			}
+		}
+		else if (screenName == "상점")
+		{
+			if (m_Shop != null)
+			{
+				m_Shop.ResetView();
+			}
+		}
+		else if (screenName == "전투")
+		{
+			if (m_Battle != null)
+			{
+				m_Battle.ResetView();
+			}
 		}
 	}
 
