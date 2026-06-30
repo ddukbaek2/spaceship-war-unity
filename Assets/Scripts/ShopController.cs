@@ -145,7 +145,7 @@ public class ShopController : MonoBehaviour
 		statRect.sizeDelta = new Vector2(-220f, 90f);
 		statRect.anchoredPosition = new Vector2(210f, -92f);
 
-		var price = UiFactory.CreateText("Price", inner.transform, m_Font, "재화 " + definition.Price, 34, new Color(1f, 0.9f, 0.5f, 1f), TextAnchor.LowerLeft);
+		var price = UiFactory.CreateText("Price", inner.transform, m_Font, "크레딧 " + definition.Price, 34, new Color(1f, 0.9f, 0.5f, 1f), TextAnchor.LowerLeft);
 		var priceRect = price.rectTransform;
 		priceRect.anchorMin = new Vector2(0f, 0f);
 		priceRect.anchorMax = new Vector2(0f, 0f);

@@ -15,6 +15,7 @@ public class PlayerState : MonoBehaviour
 	[SerializeField] private int m_Activity = 100;
 	[SerializeField] private int m_MaxActivity = 100;
 	[SerializeField] private int m_Currency = 1000;
+	[SerializeField] private int m_Metal = 30;
 	#endregion
 
 	private const string SaveKey = "spaceship_playerstate_v2";
@@ -39,6 +40,7 @@ public class PlayerState : MonoBehaviour
 		public int Activity;
 		public int MaxActivity;
 		public int Currency;
+		public int Metal;
 		public int NextModuleId;
 		public int[] Ids;
 		public int[] Types;
@@ -77,8 +79,11 @@ public class PlayerState : MonoBehaviour
 	/// <summary> 최대 활동력. </summary>
 	public int MaxActivity { get { return m_MaxActivity; } }
 
-	/// <summary> 재화. </summary>
+	/// <summary> 재화(크레딧). </summary>
 	public int Currency { get { return m_Currency; } }
+
+	/// <summary> 금속 자원. </summary>
+	public int Metal { get { return m_Metal; } }
 
 	/// <summary> 선택된 모듈 식별자(-1: 없음). </summary>
 	public int SelectedId { get { return m_SelectedId; } }
@@ -88,6 +93,28 @@ public class PlayerState : MonoBehaviour
 
 	/// <summary> 전투 수동 이동 설정 여부. </summary>
 	public bool ManualMove { get { return m_ManualMove; } }
+
+	/// <summary> 활동력 1 회복까지 남은 시간(초). 가득이면 0. </summary>
+	public float SecondsToNextRecovery
+	{
+		get
+		{
+			if (m_Activity >= m_MaxActivity)
+			{
+				return 0f;
+			}
+
+			var elapsed = DateTime.UtcNow.Ticks - m_ActivityTimestampTicks;
+			var interval = TimeSpan.TicksPerMinute * ActivityRecoverMinutes;
+			if (elapsed < 0)
+			{
+				elapsed = 0;
+			}
+
+			var remain = interval - (elapsed % interval);
+			return (float)remain / TimeSpan.TicksPerSecond;
+		}
+	}
 
 	/// <summary> 보유 모듈 목록. </summary>
 	public IReadOnlyList<ModuleInstance> Modules { get { return m_Modules; } }
@@ -354,6 +381,32 @@ public class PlayerState : MonoBehaviour
 	}
 
 	/// <summary>
+	/// 금속을 획득한다.
+	/// </summary>
+	public void AddMetal(int amount)
+	{
+		m_Metal += amount;
+		Save();
+		RaiseChanged();
+	}
+
+	/// <summary>
+	/// 금속을 소비한다.
+	/// </summary>
+	public bool TrySpendMetal(int amount)
+	{
+		if (m_Metal < amount)
+		{
+			return false;
+		}
+
+		m_Metal -= amount;
+		Save();
+		RaiseChanged();
+		return true;
+	}
+
+	/// <summary>
 	/// 활동력을 소비한다.
 	/// </summary>
 	public bool TrySpendActivity(int amount)
@@ -509,6 +562,7 @@ public class PlayerState : MonoBehaviour
 		data.Activity = m_Activity;
 		data.MaxActivity = m_MaxActivity;
 		data.Currency = m_Currency;
+		data.Metal = m_Metal;
 		data.NextModuleId = m_NextModuleId;
 
 		var count = m_Modules.Count;
@@ -556,6 +610,7 @@ public class PlayerState : MonoBehaviour
 		m_Activity = data.Activity;
 		m_MaxActivity = data.MaxActivity;
 		m_Currency = data.Currency;
+		m_Metal = data.Metal;
 		m_NextModuleId = data.NextModuleId;
 
 		m_Modules.Clear();

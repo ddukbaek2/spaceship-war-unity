@@ -10,6 +10,7 @@ using UnityEngine.UI;
 public class InventoryView : MonoBehaviour
 {
 	private PlayerState m_PlayerState;
+	private GameObject m_Panel;
 	private RectTransform m_Content;
 	private ScrollRect m_ScrollRect;
 	private TMPro.TMP_Text m_Header;
@@ -54,6 +55,7 @@ public class InventoryView : MonoBehaviour
 	private void Build(Transform modifyScreen)
 	{
 		var panel = UiFactory.CreateImage("InventoryPanel", modifyScreen, new Color(0.07f, 0.08f, 0.11f, 0.92f));
+		m_Panel = panel;
 		var panelRect = (RectTransform)panel.transform;
 		panelRect.anchorMin = new Vector2(0f, 0f);
 		panelRect.anchorMax = new Vector2(1f, 0f);
@@ -147,6 +149,17 @@ public class InventoryView : MonoBehaviour
 		m_ScrollRect.scrollSensitivity = 30f;
 		m_ScrollRect.verticalScrollbar = scrollbar;
 		m_ScrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+	}
+
+	/// <summary>
+	/// 인벤토리 패널 표시 여부를 설정한다(데크 서브탭 전환용).
+	/// </summary>
+	public void SetPanelVisible(bool visible)
+	{
+		if (m_Panel != null)
+		{
+			m_Panel.SetActive(visible);
+		}
 	}
 
 	/// <summary>

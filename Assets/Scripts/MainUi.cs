@@ -25,7 +25,12 @@ public class MainUi : MonoBehaviour
 	/// <summary>
 	/// 탭에 표시할 라벨(좌→우 순서). 오브젝트 이름과 별개로 화면 표기만 담당한다.
 	/// </summary>
-	private static readonly string[] s_DisplayNames = new string[] { "개조", "상점", "스테이지", "모험", "이벤트", "설정", "우편함" };
+	private static readonly string[] s_DisplayNames = new string[] { "데크", "상점", "스테이지", "모험", "이벤트", "설정", "우편함" };
+
+	/// <summary>
+	/// 데크 화면의 서브탭(개조/연구/승무원).
+	/// </summary>
+	private static readonly string[] s_SubTabNames = new string[] { "개조", "연구", "승무원" };
 
 	/// <summary>
 	/// 하단 탭 개수(앞 5개는 하단 네비, 이후는 상단 아이콘).
@@ -39,15 +44,23 @@ public class MainUi : MonoBehaviour
 
 	private PlayerState m_PlayerState;
 	private GameObject m_Ship;
+	private GameObject m_TopIcons;
 	private InventoryView m_Inventory;
 	private ShopController m_Shop;
 	private BattleController m_Battle;
 	private ShipCameraController m_ShipCamera;
+	private readonly List<Button> m_SubTabButtons = new List<Button>();
+	private readonly List<TMP_Text> m_SubTabLabels = new List<TMP_Text>();
+	private GameObject m_ResearchPanel;
+	private GameObject m_CrewPanel;
+	private int m_CurrentSubTab;
 	private TMP_Text m_MoveModeLabel;
 	private TMP_Text m_LevelText;
-	private TMP_Text m_ExperienceText;
+	private RectTransform m_ExpFillRect;
 	private TMP_Text m_ActivityText;
+	private TMP_Text m_ActivityTimerText;
 	private TMP_Text m_CurrencyText;
+	private TMP_Text m_MetalText;
 	private readonly List<Button> m_NavButtons = new List<Button>();
 	private readonly List<TMP_Text> m_NavLabels = new List<TMP_Text>();
 	private readonly List<GameObject> m_Screens = new List<GameObject>();
@@ -71,6 +84,7 @@ public class MainUi : MonoBehaviour
 		var screensTransform = canvasTransform.Find("Screens");
 		var navigationTransform = canvasTransform.Find("BottomNavigation");
 		var topIconsTransform = canvasTransform.Find("TopIcons");
+		m_TopIcons = topIconsTransform.gameObject;
 
 		for (int index = 0; index < s_ScreenNames.Length; index++)
 		{
@@ -104,6 +118,7 @@ public class MainUi : MonoBehaviour
 			navButton.onClick.AddListener(() => SelectScreen(capturedIndex));
 		}
 
+		BuildDeckSubTabs(screensTransform.Find("Screen_개조"));
 		BuildSettingsPlaceholder(screensTransform.Find("Screen_설정"));
 
 		if (m_PlayerState != null)
@@ -136,10 +151,56 @@ public class MainUi : MonoBehaviour
 			DestroyImmediate(topHud.GetChild(index).gameObject);
 		}
 
-		m_LevelText = MakeHudText(topHud, "LevelText", 0f, 0.25f, 24f, 0f, 30, Color.white, TextAnchor.MiddleLeft);
-		m_ExperienceText = MakeHudText(topHud, "ExperienceText", 0.25f, 0.5f, 0f, 0f, 28, new Color(0.65f, 0.9f, 0.55f, 1f), TextAnchor.MiddleCenter);
-		m_ActivityText = MakeHudText(topHud, "ActivityText", 0.5f, 0.78f, 0f, 0f, 28, new Color(0.6f, 0.85f, 1f, 1f), TextAnchor.MiddleCenter);
-		m_CurrencyText = MakeHudText(topHud, "CurrencyText", 0.78f, 1f, 0f, -24f, 30, new Color(1f, 0.85f, 0.4f, 1f), TextAnchor.MiddleRight);
+		// 레벨 텍스트 + 경험치 게이지 (0 ~ 0.42)
+		m_LevelText = MakeHudText(topHud, "LevelText", 0f, 0.42f, 24f, 0f, 30, Color.white, TextAnchor.MiddleLeft);
+		var levelRect = m_LevelText.rectTransform;
+		levelRect.anchorMin = new Vector2(0f, 0.42f);
+		levelRect.anchorMax = new Vector2(0.42f, 1f);
+
+		var gaugeBg = UiFactory.CreateImage("ExpGaugeBg", topHud, new Color(0.16f, 0.18f, 0.22f, 1f));
+		var bgImage = gaugeBg.GetComponent<Image>();
+		bgImage.sprite = null;
+		bgImage.type = Image.Type.Simple;
+		bgImage.raycastTarget = false;
+		var bgRect = (RectTransform)gaugeBg.transform;
+		bgRect.anchorMin = new Vector2(0f, 0.16f);
+		bgRect.anchorMax = new Vector2(0.42f, 0.4f);
+		bgRect.offsetMin = new Vector2(24f, 0f);
+		bgRect.offsetMax = new Vector2(-8f, 0f);
+
+		var gaugeFill = UiFactory.CreateImage("ExpGaugeFill", gaugeBg.transform, new Color(0.45f, 0.85f, 0.5f, 1f));
+		var fillImage = gaugeFill.GetComponent<Image>();
+		fillImage.sprite = null;
+		fillImage.type = Image.Type.Simple;
+		fillImage.raycastTarget = false;
+		m_ExpFillRect = (RectTransform)gaugeFill.transform;
+		m_ExpFillRect.anchorMin = new Vector2(0f, 0f);
+		m_ExpFillRect.anchorMax = new Vector2(0f, 1f);
+		m_ExpFillRect.pivot = new Vector2(0f, 0.5f);
+		m_ExpFillRect.offsetMin = new Vector2(0f, 0f);
+		m_ExpFillRect.offsetMax = new Vector2(0f, 0f);
+
+		// 활동력 + 회복 타이머 (0.42 ~ 0.72)
+		m_ActivityText = MakeHudText(topHud, "ActivityText", 0.42f, 0.72f, 0f, 0f, 26, new Color(0.6f, 0.85f, 1f, 1f), TextAnchor.LowerCenter);
+		var actRect = m_ActivityText.rectTransform;
+		actRect.anchorMin = new Vector2(0.42f, 0.42f);
+		actRect.anchorMax = new Vector2(0.72f, 1f);
+
+		m_ActivityTimerText = MakeHudText(topHud, "ActivityTimer", 0.42f, 0.72f, 0f, 0f, 20, new Color(0.5f, 0.62f, 0.74f, 1f), TextAnchor.UpperCenter);
+		var timerRect = m_ActivityTimerText.rectTransform;
+		timerRect.anchorMin = new Vector2(0.42f, 0f);
+		timerRect.anchorMax = new Vector2(0.72f, 0.46f);
+
+		// 크레딧 + 금속 (0.72 ~ 1, 세로 2줄)
+		m_CurrencyText = MakeHudText(topHud, "CurrencyText", 0.72f, 1f, 0f, -24f, 24, new Color(1f, 0.85f, 0.4f, 1f), TextAnchor.LowerRight);
+		var currencyRect = m_CurrencyText.rectTransform;
+		currencyRect.anchorMin = new Vector2(0.72f, 0.5f);
+		currencyRect.anchorMax = new Vector2(1f, 1f);
+
+		m_MetalText = MakeHudText(topHud, "MetalText", 0.72f, 1f, 0f, -24f, 24, new Color(0.72f, 0.79f, 0.86f, 1f), TextAnchor.UpperRight);
+		var metalRect = m_MetalText.rectTransform;
+		metalRect.anchorMin = new Vector2(0.72f, 0f);
+		metalRect.anchorMax = new Vector2(1f, 0.5f);
 	}
 
 	/// <summary>
@@ -275,12 +336,131 @@ public class MainUi : MonoBehaviour
 			m_NavLabels[index].color = isActive ? m_ActiveLabelColor : m_InactiveLabelColor;
 		}
 
-		if (m_Ship != null)
+		if (activeIndex == 0)
 		{
-			m_Ship.SetActive(activeIndex == 0);
+			SelectSubTab(0);
+		}
+		else if (m_Ship != null)
+		{
+			m_Ship.SetActive(false);
+		}
+
+		if (m_TopIcons != null)
+		{
+			m_TopIcons.SetActive(s_ScreenNames[activeIndex] == "전투");
 		}
 
 		ResetActiveScreen(activeIndex);
+	}
+
+	/// <summary>
+	/// 데크 화면 안에 서브탭(개조/연구/승무원) 바와 연구·승무원 패널을 구성한다.
+	/// </summary>
+	private void BuildDeckSubTabs(Transform deckScreen)
+	{
+		var bar = UiFactory.CreateImage("SubTabBar", deckScreen, new Color(0.1f, 0.11f, 0.14f, 0.95f));
+		var barImage = bar.GetComponent<Image>();
+		barImage.sprite = null;
+		barImage.type = Image.Type.Simple;
+		var barRect = (RectTransform)bar.transform;
+		barRect.anchorMin = new Vector2(0f, 1f);
+		barRect.anchorMax = new Vector2(1f, 1f);
+		barRect.pivot = new Vector2(0.5f, 1f);
+		barRect.sizeDelta = new Vector2(0f, 84f);
+
+		for (int index = 0; index < s_SubTabNames.Length; index++)
+		{
+			var buttonObject = UiFactory.CreateImage("SubTab_" + s_SubTabNames[index], bar.transform, m_InactiveColor);
+			var buttonImage = buttonObject.GetComponent<Image>();
+			buttonImage.sprite = null;
+			buttonImage.type = Image.Type.Simple;
+			var buttonRect = (RectTransform)buttonObject.transform;
+			buttonRect.anchorMin = new Vector2((float)index / s_SubTabNames.Length, 0f);
+			buttonRect.anchorMax = new Vector2((float)(index + 1) / s_SubTabNames.Length, 1f);
+			buttonRect.offsetMin = new Vector2(2f, 2f);
+			buttonRect.offsetMax = new Vector2(-2f, -2f);
+
+			var button = buttonObject.AddComponent<Button>();
+			var label = UiFactory.CreateText("Label", buttonObject.transform, null, s_SubTabNames[index], 32, Color.white, TextAnchor.MiddleCenter);
+			label.raycastTarget = false;
+			m_SubTabButtons.Add(button);
+			m_SubTabLabels.Add(label);
+
+			var capturedIndex = index;
+			button.onClick.AddListener(() => SelectSubTab(capturedIndex));
+		}
+
+		m_ResearchPanel = CreateSubPanel(deckScreen, "Sub_연구", "연구");
+		m_CrewPanel = CreateSubPanel(deckScreen, "Sub_승무원", "승무원");
+	}
+
+	/// <summary>
+	/// 서브탭 '준비 중' 패널을 만든다(서브탭바 아래 전체).
+	/// </summary>
+	private GameObject CreateSubPanel(Transform parent, string name, string display)
+	{
+		var panel = UiFactory.CreateImage(name, parent, new Color(0.08f, 0.09f, 0.12f, 1f));
+		var rect = (RectTransform)panel.transform;
+		rect.anchorMin = new Vector2(0f, 0f);
+		rect.anchorMax = new Vector2(1f, 1f);
+		rect.offsetMin = new Vector2(0f, 0f);
+		rect.offsetMax = new Vector2(0f, -84f);
+
+		var title = UiFactory.CreateText("Title", panel.transform, null, display, 72, new Color(0.85f, 0.88f, 0.95f, 1f), TextAnchor.MiddleCenter);
+		title.rectTransform.anchoredPosition = new Vector2(0f, 40f);
+		var note = UiFactory.CreateText("Note", panel.transform, null, "준비 중", 36, new Color(0.5f, 0.52f, 0.58f, 1f), TextAnchor.MiddleCenter);
+		note.rectTransform.anchoredPosition = new Vector2(0f, -60f);
+		panel.SetActive(false);
+		return panel;
+	}
+
+	/// <summary>
+	/// 데크 서브탭을 전환한다(개조=인벤토리+함선, 연구/승무원=준비 중).
+	/// </summary>
+	private void SelectSubTab(int index)
+	{
+		m_CurrentSubTab = index;
+		var isBuild = (index == 0);
+
+		if (m_Inventory != null)
+		{
+			m_Inventory.SetPanelVisible(isBuild);
+		}
+
+		if (m_Ship != null)
+		{
+			m_Ship.SetActive(isBuild);
+		}
+
+		if (m_ResearchPanel != null)
+		{
+			m_ResearchPanel.SetActive(index == 1);
+		}
+
+		if (m_CrewPanel != null)
+		{
+			m_CrewPanel.SetActive(index == 2);
+		}
+
+		for (int i = 0; i < m_SubTabButtons.Count; i++)
+		{
+			var isActive = (i == index);
+			m_SubTabButtons[i].GetComponent<Image>().color = isActive ? m_ActiveColor : m_InactiveColor;
+			m_SubTabLabels[i].color = isActive ? m_ActiveLabelColor : m_InactiveLabelColor;
+		}
+
+		if (isBuild)
+		{
+			if (m_ShipCamera != null)
+			{
+				m_ShipCamera.ResetView();
+			}
+
+			if (m_Inventory != null)
+			{
+				m_Inventory.ResetView();
+			}
+		}
 	}
 
 	/// <summary>
@@ -294,19 +474,7 @@ public class MainUi : MonoBehaviour
 		}
 
 		var screenName = s_ScreenNames[activeIndex];
-		if (screenName == "개조")
-		{
-			if (m_ShipCamera != null)
-			{
-				m_ShipCamera.ResetView();
-			}
-
-			if (m_Inventory != null)
-			{
-				m_Inventory.ResetView();
-			}
-		}
-		else if (screenName == "상점")
+		if (screenName == "상점")
 		{
 			if (m_Shop != null)
 			{
@@ -336,13 +504,39 @@ public class MainUi : MonoBehaviour
 		m_LevelText.text = "Lv. " + level;
 
 		var experience = m_PlayerState.Experience;
-		m_ExperienceText.text = "EXP " + experience + " / " + level;
+		var ratio = level > 0 ? (float)experience / level : 0f;
+		m_ExpFillRect.anchorMax = new Vector2(Mathf.Clamp01(ratio), 1f);
 
 		var activity = m_PlayerState.Activity;
 		var maxActivity = m_PlayerState.MaxActivity;
 		m_ActivityText.text = "활동력 " + activity + " / " + maxActivity;
 
 		var currency = m_PlayerState.Currency;
-		m_CurrencyText.text = "재화 " + currency;
+		m_CurrencyText.text = "크레딧 " + currency;
+
+		var metal = m_PlayerState.Metal;
+		m_MetalText.text = "금속 " + metal;
+	}
+
+	/// <summary>
+	/// 매 프레임 활동력 회복 타이머를 갱신한다.
+	/// </summary>
+	private void Update()
+	{
+		if (m_ActivityTimerText == null || m_PlayerState == null)
+		{
+			return;
+		}
+
+		if (m_PlayerState.Activity >= m_PlayerState.MaxActivity)
+		{
+			m_ActivityTimerText.text = "가득 참";
+			return;
+		}
+
+		var seconds = Mathf.CeilToInt(m_PlayerState.SecondsToNextRecovery);
+		var minutes = seconds / 60;
+		var rest = seconds % 60;
+		m_ActivityTimerText.text = "+1까지 " + minutes + ":" + rest.ToString("00");
 	}
 }

@@ -27,9 +27,11 @@ public class BattleManager : MonoBehaviour
 	private GameObject m_ExitButton;
 	private GameObject m_WarningPanel;
 	private GameObject m_ResultPanel;
+	private GameObject m_ResultBanner;
 	private TMPro.TMP_Text m_ResultTitle;
 	private TMPro.TMP_Text m_ExperienceLine;
 	private TMPro.TMP_Text m_CurrencyLine;
+	private TMPro.TMP_Text m_MetalLine;
 	private TMPro.TMP_Text m_ItemLine;
 
 	/// <summary>
@@ -376,16 +378,58 @@ public class BattleManager : MonoBehaviour
 		panelRect.anchorMin = new Vector2(0.5f, 0.5f);
 		panelRect.anchorMax = new Vector2(0.5f, 0.5f);
 		panelRect.pivot = new Vector2(0.5f, 0.5f);
-		panelRect.sizeDelta = new Vector2(840f, 720f);
+		panelRect.sizeDelta = new Vector2(860f, 820f);
 
-		m_ResultTitle = CreateCenteredText(panel.transform, "Title", 64, Color.white, 250f, new Vector2(760f, 110f));
-		m_ExperienceLine = CreateCenteredText(panel.transform, "ExperienceLine", 40, Color.white, 90f, new Vector2(700f, 70f));
-		m_CurrencyLine = CreateCenteredText(panel.transform, "CurrencyLine", 40, Color.white, 10f, new Vector2(700f, 70f));
-		m_ItemLine = CreateCenteredText(panel.transform, "ItemLine", 40, Color.white, -70f, new Vector2(700f, 70f));
+		// 상단 배너(승/패 색은 ShowResult에서)
+		m_ResultBanner = UiFactory.CreateImage("Banner", panel.transform, new Color(0.16f, 0.5f, 0.45f, 1f));
+		var bannerRect = (RectTransform)m_ResultBanner.transform;
+		bannerRect.anchorMin = new Vector2(0f, 1f);
+		bannerRect.anchorMax = new Vector2(1f, 1f);
+		bannerRect.pivot = new Vector2(0.5f, 1f);
+		bannerRect.sizeDelta = new Vector2(0f, 180f);
+		m_ResultTitle = UiFactory.CreateText("Title", m_ResultBanner.transform, null, "", 76, Color.white, TextAnchor.MiddleCenter);
+		m_ResultTitle.raycastTarget = false;
+
+		// 보상 칩 카드
+		m_ExperienceLine = CreateRewardChip(panel.transform, "경험치", 150f);
+		m_CurrencyLine = CreateRewardChip(panel.transform, "크레딧", 56f);
+		m_MetalLine = CreateRewardChip(panel.transform, "금속", -38f);
+		m_ItemLine = CreateRewardChip(panel.transform, "아이템", -132f);
 
 		CreateButton(panel.transform, "Confirm", "확인", new Color(0.2f, 0.55f, 0.6f, 1f), new Vector2(0.5f, 0f), OnConfirm);
 
 		m_ResultPanel.SetActive(false);
+	}
+
+	/// <summary>
+	/// 보상 한 줄(칩 배경 + 좌측 항목명 + 우측 값)을 만든다. 우측 값 텍스트를 반환한다.
+	/// </summary>
+	private TMPro.TMP_Text CreateRewardChip(Transform parent, string labelText, float anchoredY)
+	{
+		var chip = UiFactory.CreateImage("Chip_" + labelText, parent, new Color(0.13f, 0.15f, 0.2f, 1f));
+		var chipRect = (RectTransform)chip.transform;
+		chipRect.anchorMin = new Vector2(0.5f, 0.5f);
+		chipRect.anchorMax = new Vector2(0.5f, 0.5f);
+		chipRect.pivot = new Vector2(0.5f, 0.5f);
+		chipRect.sizeDelta = new Vector2(700f, 84f);
+		chipRect.anchoredPosition = new Vector2(0f, anchoredY);
+
+		var label = UiFactory.CreateText("Label", chip.transform, null, labelText, 36, new Color(0.64f, 0.68f, 0.74f, 1f), TextAnchor.MiddleLeft);
+		label.raycastTarget = false;
+		var labelRect = label.rectTransform;
+		labelRect.anchorMin = new Vector2(0f, 0f);
+		labelRect.anchorMax = new Vector2(0.5f, 1f);
+		labelRect.offsetMin = new Vector2(32f, 0f);
+		labelRect.offsetMax = new Vector2(0f, 0f);
+
+		var value = UiFactory.CreateText("Value", chip.transform, null, "", 38, Color.white, TextAnchor.MiddleRight);
+		value.raycastTarget = false;
+		var valueRect = value.rectTransform;
+		valueRect.anchorMin = new Vector2(0.5f, 0f);
+		valueRect.anchorMax = new Vector2(1f, 1f);
+		valueRect.offsetMin = new Vector2(0f, 0f);
+		valueRect.offsetMax = new Vector2(-32f, 0f);
+		return value;
 	}
 
 	/// <summary>
@@ -467,6 +511,7 @@ public class BattleManager : MonoBehaviour
 		if (playerWon)
 		{
 			BattleContext.ResultCurrency = Mathf.RoundToInt(BattleContext.EnemyPower * 0.4f) + Random.Range(10, 40);
+			BattleContext.ResultMetal = Mathf.RoundToInt(BattleContext.EnemyPower * 0.08f) + Random.Range(2, 8);
 			BattleContext.ResultExperience = 1;
 			BattleContext.ResultHasItem = Random.value < 0.5f;
 			BattleContext.ResultItem = (ModuleType)Random.Range(0, 3);
@@ -474,6 +519,7 @@ public class BattleManager : MonoBehaviour
 		else
 		{
 			BattleContext.ResultCurrency = 0;
+			BattleContext.ResultMetal = 0;
 			BattleContext.ResultExperience = 0;
 			BattleContext.ResultHasItem = false;
 		}
@@ -486,27 +532,31 @@ public class BattleManager : MonoBehaviour
 	/// </summary>
 	private void ShowResult(bool playerWon)
 	{
-		var gainColor = new Color(0.6f, 1f, 0.65f, 1f);
+		var gainColor = new Color(0.65f, 1f, 0.7f, 1f);
 		var missColor = new Color(0.55f, 0.57f, 0.62f, 1f);
 
-		m_ResultTitle.text = playerWon ? "승리!" : "패배...";
-		m_ResultTitle.color = playerWon ? gainColor : new Color(1f, 0.5f, 0.5f, 1f);
+		m_ResultBanner.GetComponent<Image>().color = playerWon ? new Color(0.16f, 0.52f, 0.46f, 1f) : new Color(0.46f, 0.2f, 0.23f, 1f);
+		m_ResultTitle.text = playerWon ? "★  승  리  ★" : "패  배";
+		m_ResultTitle.color = playerWon ? new Color(1f, 0.96f, 0.72f, 1f) : new Color(1f, 0.78f, 0.78f, 1f);
 
-		m_ExperienceLine.text = "경험치        " + (playerWon ? "+1" : "+0");
+		m_ExperienceLine.text = playerWon ? "+1" : "+0";
 		m_ExperienceLine.color = playerWon ? gainColor : missColor;
 
-		m_CurrencyLine.text = "재화           " + (playerWon ? "+" + BattleContext.ResultCurrency : "+0");
+		m_CurrencyLine.text = playerWon ? "+" + BattleContext.ResultCurrency : "+0";
 		m_CurrencyLine.color = playerWon ? gainColor : missColor;
+
+		m_MetalLine.text = playerWon ? "+" + BattleContext.ResultMetal : "+0";
+		m_MetalLine.color = playerWon ? gainColor : missColor;
 
 		if (playerWon && BattleContext.ResultHasItem)
 		{
 			var definition = ModuleCatalog.Get(BattleContext.ResultItem);
-			m_ItemLine.text = "아이템        " + definition.DisplayName + " 모듈 획득";
+			m_ItemLine.text = definition.DisplayName + " 획득";
 			m_ItemLine.color = gainColor;
 		}
 		else
 		{
-			m_ItemLine.text = "아이템        없음";
+			m_ItemLine.text = "없음";
 			m_ItemLine.color = missColor;
 		}
 

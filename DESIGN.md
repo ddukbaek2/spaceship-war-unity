@@ -192,6 +192,18 @@ UI
   - **동력로 전용 외형**: `ReactorCore.prefab`을 베이스(어두운 금속) + 금속 하우징(실린더) + 청록 발광 에너지 코어(구체, HDR 이미션)로 재구성.
   - 재빌드·NAS 재배포.
 
+- 2026-06-29
+  - **상단 HUD 개편**: 레벨/경험치 영역 통합 — `Lv. N` 텍스트 + 경험치 **게이지 바**(숫자 미표시, fill 폭=경험치/레벨). 활동력 아래 **회복 타이머**(`+1까지 m:ss`, 가득이면 '가득 참') — `PlayerState.SecondsToNextRecovery` + `MainUi.Update`로 매 프레임 갱신(분당 1 회복은 기존 구현). **재화→크레딧** 표기 변경(HUD/상점/전투 결과).
+  - **데크 서브탭**: 하단 '개조' 탭 라벨을 '데크'로 변경, 데크 화면 상단에 서브탭(개조/연구/승무원, 기본 개조). 개조=인벤토리 패널+월드 함선, 연구/승무원='준비 중' 플레이스홀더. `InventoryView.SetPanelVisible`로 토글, `MainUi.SelectSubTab`이 함선/패널/카메라 초기화 관리.
+  - **설정/우편함 라벨 한글화**: 상단 아이콘 ⚙/✉ → '설정'/'우편함' 텍스트(버튼 가로 확장).
+  - 재빌드·NAS 재배포.
+
+- 2026-06-30
+  - **금속 자원 추가**: `PlayerState.Metal` + `AddMetal`/`TrySpendMetal` + 저장, 상단 HUD 우측에 크레딧/금속 세로 2줄. 전투 승리 보상에 금속 연결(`BattleContext.ResultMetal`).
+  - **전투 결과 팝업 리디자인**: 승/패 색 배너 + 큰 타이틀('★ 승 리 ★'/'패 배'), 보상을 **칩 카드**(경험치/크레딧/금속/아이템, 좌측 항목명 + 우측 값)로 표시.
+  - **모듈 외곽선 URP 셰이더 `Spaceship/ModuleLit`**: 2-pass(인버티드 헐 외곽선 + 간이 URP 람베르트 라이팅). `_BaseColor`/`_EmissionColor`/`_OutlineColor`/`_OutlineWidth`. Resources/Modules의 모든 모듈 머티리얼(31개)을 이 셰이더로 교체(색 보존), Always Included 등록. `ModuleFactory`의 런타임 인버티드 헐(AddOutline) 제거 — 외곽선은 셰이더가 담당. (빌드 용량 79→68MB 감소.)
+  - 재빌드·NAS 재배포.
+
 ## 7. 게임 루프 로드맵 (목표 설계)
 
 사용자 의도에 따른 전체 흐름. 단계별로 구현한다.

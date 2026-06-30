@@ -468,6 +468,11 @@ public class BattleController : MonoBehaviour
 				m_PlayerState.AddCurrency(BattleContext.ResultCurrency);
 			}
 
+			if (BattleContext.ResultMetal > 0)
+			{
+				m_PlayerState.AddMetal(BattleContext.ResultMetal);
+			}
+
 			m_PlayerState.RegisterWin();
 			m_PlayerState.MarkStageCleared(BattleContext.StageIndex);
 

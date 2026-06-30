@@ -54,9 +54,14 @@ public static class BattleContext
 	public static bool ResultPlayerWon;
 
 	/// <summary>
-	/// 획득 재화.
+	/// 획득 재화(크레딧).
 	/// </summary>
 	public static int ResultCurrency;
+
+	/// <summary>
+	/// 획득 금속.
+	/// </summary>
+	public static int ResultMetal;
 
 	/// <summary>
 	/// 획득 경험치(승리 1, 패배 0).
