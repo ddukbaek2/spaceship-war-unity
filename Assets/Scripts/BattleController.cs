@@ -51,6 +51,8 @@ public class BattleController : MonoBehaviour
 	private RectTransform m_ListContent;
 	private ScrollRect m_ScrollRect;
 	private TMP_Text m_MessageText;
+	private GameObject m_MenuPanel;
+	private GameObject m_ListPanel;
 	private readonly List<EnemyShip> m_Enemies = new List<EnemyShip>();
 	private bool m_Busy;
 
@@ -70,10 +72,98 @@ public class BattleController : MonoBehaviour
 		m_MainCanvas = canvasObject;
 		m_MainCamera = GameObject.Find("Main Camera");
 
-		var battleScreen = canvasObject.transform.Find("Screens").Find("Screen_전투");
-		BuildList(battleScreen);
+		var advScreen = canvasObject.transform.Find("Screens").Find("Screen_모험");
+		for (int index = advScreen.childCount - 1; index >= 0; index--)
+		{
+			DestroyImmediate(advScreen.GetChild(index).gameObject);
+		}
+
+		m_MenuPanel = CreatePanel(advScreen, "AdventureMenu");
+		m_ListPanel = CreatePanel(advScreen, "BossList");
+		BuildMenu(m_MenuPanel.transform);
+		BuildList(m_ListPanel.transform);
 		BuildStages();
 		RefreshList();
+		ShowMenu();
+	}
+
+	/// <summary>
+	/// 화면을 꽉 채우는 빈 패널을 만든다.
+	/// </summary>
+	private GameObject CreatePanel(Transform parent, string name)
+	{
+		var panel = new GameObject(name, typeof(RectTransform));
+		panel.layer = parent.gameObject.layer;
+		panel.transform.SetParent(parent, false);
+		var rect = (RectTransform)panel.transform;
+		rect.anchorMin = new Vector2(0f, 0f);
+		rect.anchorMax = new Vector2(1f, 1f);
+		rect.offsetMin = new Vector2(0f, 0f);
+		rect.offsetMax = new Vector2(0f, 0f);
+		return panel;
+	}
+
+	/// <summary>
+	/// 모험 메뉴(보스 전투 진입 버튼)를 구성한다.
+	/// </summary>
+	private void BuildMenu(Transform menuPanel)
+	{
+		var banner = UiFactory.CreateImage("Banner", menuPanel, new Color(0.12f, 0.14f, 0.22f, 1f));
+		var bannerRect = (RectTransform)banner.transform;
+		bannerRect.anchorMin = new Vector2(0f, 1f);
+		bannerRect.anchorMax = new Vector2(1f, 1f);
+		bannerRect.pivot = new Vector2(0.5f, 1f);
+		bannerRect.sizeDelta = new Vector2(0f, 110f);
+		UiFactory.CreateText("Title", banner.transform, null, "모험", 52, new Color(0.75f, 0.85f, 1f, 1f), TextAnchor.MiddleCenter);
+
+		var bossButton = UiFactory.CreateImage("BossBattle", menuPanel, new Color(0.4f, 0.22f, 0.26f, 1f));
+		var bossRect = (RectTransform)bossButton.transform;
+		bossRect.anchorMin = new Vector2(0.5f, 0.5f);
+		bossRect.anchorMax = new Vector2(0.5f, 0.5f);
+		bossRect.pivot = new Vector2(0.5f, 0.5f);
+		bossRect.sizeDelta = new Vector2(560f, 170f);
+		bossRect.anchoredPosition = new Vector2(0f, 120f);
+		bossButton.AddComponent<Button>().onClick.AddListener(ShowList);
+		var bossLabel = UiFactory.CreateText("Label", bossButton.transform, null, "보스 전투", 46, Color.white, TextAnchor.MiddleCenter);
+		bossLabel.raycastTarget = false;
+	}
+
+	/// <summary>
+	/// 모험 메뉴 화면을 보인다.
+	/// </summary>
+	private void ShowMenu()
+	{
+		if (m_MenuPanel != null)
+		{
+			m_MenuPanel.SetActive(true);
+		}
+
+		if (m_ListPanel != null)
+		{
+			m_ListPanel.SetActive(false);
+		}
+	}
+
+	/// <summary>
+	/// 보스 목록 화면을 보인다.
+	/// </summary>
+	private void ShowList()
+	{
+		if (m_MenuPanel != null)
+		{
+			m_MenuPanel.SetActive(false);
+		}
+
+		if (m_ListPanel != null)
+		{
+			m_ListPanel.SetActive(true);
+		}
+
+		RefreshList();
+		if (m_ScrollRect != null)
+		{
+			m_ScrollRect.verticalNormalizedPosition = 1f;
+		}
 	}
 
 	/// <summary>
@@ -81,18 +171,24 @@ public class BattleController : MonoBehaviour
 	/// </summary>
 	private void BuildList(Transform battleScreen)
 	{
-		for (int index = battleScreen.childCount - 1; index >= 0; index--)
-		{
-			DestroyImmediate(battleScreen.GetChild(index).gameObject);
-		}
-
 		var banner = UiFactory.CreateImage("Banner", battleScreen, new Color(0.22f, 0.12f, 0.14f, 1f));
 		var bannerRect = (RectTransform)banner.transform;
 		bannerRect.anchorMin = new Vector2(0f, 1f);
 		bannerRect.anchorMax = new Vector2(1f, 1f);
 		bannerRect.pivot = new Vector2(0.5f, 1f);
 		bannerRect.sizeDelta = new Vector2(0f, 110f);
-		UiFactory.CreateText("Title", banner.transform, null, "⚔ 스테이지 ⚔", 52, new Color(1f, 0.6f, 0.55f, 1f), TextAnchor.MiddleCenter);
+		UiFactory.CreateText("Title", banner.transform, null, "보스 전투", 52, new Color(1f, 0.6f, 0.55f, 1f), TextAnchor.MiddleCenter);
+
+		var backButton = UiFactory.CreateImage("Back", banner.transform, new Color(0.3f, 0.34f, 0.4f, 1f));
+		var backRect = (RectTransform)backButton.transform;
+		backRect.anchorMin = new Vector2(0f, 0.5f);
+		backRect.anchorMax = new Vector2(0f, 0.5f);
+		backRect.pivot = new Vector2(0f, 0.5f);
+		backRect.sizeDelta = new Vector2(120f, 64f);
+		backRect.anchoredPosition = new Vector2(16f, 0f);
+		backButton.AddComponent<Button>().onClick.AddListener(ShowMenu);
+		var backLabel = UiFactory.CreateText("Label", backButton.transform, null, "뒤로", 28, Color.white, TextAnchor.MiddleCenter);
+		backLabel.raycastTarget = false;
 
 		m_MessageText = UiFactory.CreateText("Message", battleScreen, null, "스테이지를 선택하세요 (전투당 활동력 " + ActivityCost + ")", 26, new Color(0.7f, 0.72f, 0.78f, 1f), TextAnchor.MiddleCenter);
 		var messageRect = m_MessageText.rectTransform;
@@ -141,11 +237,7 @@ public class BattleController : MonoBehaviour
 	/// </summary>
 	public void ResetView()
 	{
-		RefreshList();
-		if (m_ScrollRect != null)
-		{
-			m_ScrollRect.verticalNormalizedPosition = 1f;
-		}
+		ShowMenu();
 	}
 
 	/// <summary>
@@ -216,7 +308,7 @@ public class BattleController : MonoBehaviour
 			var row = new StageJsonRow();
 			row.Index = index;
 			row.EnemyName = s_EnemyNames[index % s_EnemyNames.Length];
-			row.ModuleCount = Mathf.Min(1 + index, 8);
+			row.ModuleCount = Mathf.Min(10 + index * 12, 120);
 			row.MaxTier = Mathf.Min(index / 3, s_StageTiers.Length - 1);
 			row.Seed = 7919 + index * 131;
 			rows[index] = row;
@@ -254,15 +346,21 @@ public class BattleController : MonoBehaviour
 		var occupied = new HashSet<Vector2Int>();
 		occupied.Add(s_CoreCell);
 
-		var count = Mathf.Min(row.ModuleCount, 8);
+		var count = Mathf.Min(row.ModuleCount, 120);
 		for (int index = 0; index < count; index++)
 		{
+			// 좌우대칭: 우측(및 중앙) 슬롯만 후보로 두고, 배치 시 좌측에 거울상으로도 배치한다.
 			var slots = new List<Vector2Int>();
 			foreach (var cell in occupied)
 			{
 				foreach (var direction in s_Directions)
 				{
 					var neighbor = cell + direction;
+					if (neighbor.x < 0)
+					{
+						continue;
+					}
+
 					if (!occupied.Contains(neighbor) && !slots.Contains(neighbor))
 					{
 						slots.Add(neighbor);
@@ -276,11 +374,24 @@ public class BattleController : MonoBehaviour
 			}
 
 			var coordinate = slots[Random.Range(0, slots.Count)];
+			var type = pool[Random.Range(0, pool.Count)];
+
 			var placement = new ModulePlacement();
 			placement.Coordinate = coordinate;
-			placement.Type = pool[Random.Range(0, pool.Count)];
+			placement.Type = type;
 			layout.Add(placement);
 			occupied.Add(coordinate);
+
+			var mirror = new Vector2Int(-coordinate.x, coordinate.y);
+			if (mirror != coordinate && !occupied.Contains(mirror))
+			{
+				var mirrorPlacement = new ModulePlacement();
+				mirrorPlacement.Coordinate = mirror;
+				mirrorPlacement.Type = type;
+				layout.Add(mirrorPlacement);
+				occupied.Add(mirror);
+				index++;
+			}
 		}
 
 		var enemy = new EnemyShip();
@@ -378,7 +489,7 @@ public class BattleController : MonoBehaviour
 
 		if (cleared)
 		{
-			var clearBadge = UiFactory.CreateText("Clear", row.transform, null, "✔ 클리어", 26, new Color(0.5f, 1f, 0.6f, 1f), TextAnchor.MiddleRight);
+			var clearBadge = UiFactory.CreateText("Clear", row.transform, null, "클리어", 26, new Color(0.5f, 1f, 0.6f, 1f), TextAnchor.MiddleRight);
 			clearBadge.raycastTarget = false;
 			var clearRect = clearBadge.rectTransform;
 			clearRect.anchorMin = new Vector2(1f, 0.5f);
@@ -480,6 +591,18 @@ public class BattleController : MonoBehaviour
 			{
 				m_PlayerState.AddModule(BattleContext.ResultItem);
 			}
+
+			var stageName = "스테이지 " + (BattleContext.StageIndex + 1);
+			NotificationLog.Add(stageName + " 클리어 · 크레딧 +" + BattleContext.ResultCurrency + " 금속 +" + BattleContext.ResultMetal);
+			if (BattleContext.ResultHasItem)
+			{
+				var itemDefinition = ModuleCatalog.Get(BattleContext.ResultItem);
+				NotificationLog.Add(itemDefinition.DisplayName + " 모듈을 획득했습니다.");
+			}
+		}
+		else
+		{
+			NotificationLog.Add("스테이지 " + (BattleContext.StageIndex + 1) + " 전투에서 패배했습니다.");
 		}
 
 		SceneManager.SetActiveScene(gameObject.scene);

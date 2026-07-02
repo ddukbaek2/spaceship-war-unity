@@ -38,9 +38,9 @@ public class MainUi : MonoBehaviour
 	private const int BottomTabCount = 5;
 
 	/// <summary>
-	/// 기본 진입 탭(스테이지).
+	/// 기본 진입 탭(모험=보스 전투).
 	/// </summary>
-	private const int DefaultScreenIndex = 2;
+	private const int DefaultScreenIndex = 3;
 
 	private PlayerState m_PlayerState;
 	private GameObject m_Ship;
@@ -53,6 +53,7 @@ public class MainUi : MonoBehaviour
 	private readonly List<TMP_Text> m_SubTabLabels = new List<TMP_Text>();
 	private GameObject m_ResearchPanel;
 	private GameObject m_CrewPanel;
+	private TMP_Text m_AutoPreviewLabel;
 	private int m_CurrentSubTab;
 	private TMP_Text m_MoveModeLabel;
 	private TMP_Text m_LevelText;
@@ -151,24 +152,19 @@ public class MainUi : MonoBehaviour
 			DestroyImmediate(topHud.GetChild(index).gameObject);
 		}
 
-		// 레벨 텍스트 + 경험치 게이지 (0 ~ 0.42)
-		m_LevelText = MakeHudText(topHud, "LevelText", 0f, 0.42f, 24f, 0f, 30, Color.white, TextAnchor.MiddleLeft);
-		var levelRect = m_LevelText.rectTransform;
-		levelRect.anchorMin = new Vector2(0f, 0.42f);
-		levelRect.anchorMax = new Vector2(0.42f, 1f);
-
+		// 경험치 게이지 (레벨을 게이지 안에 표시) (0 ~ 0.4)
 		var gaugeBg = UiFactory.CreateImage("ExpGaugeBg", topHud, new Color(0.16f, 0.18f, 0.22f, 1f));
 		var bgImage = gaugeBg.GetComponent<Image>();
 		bgImage.sprite = null;
 		bgImage.type = Image.Type.Simple;
 		bgImage.raycastTarget = false;
 		var bgRect = (RectTransform)gaugeBg.transform;
-		bgRect.anchorMin = new Vector2(0f, 0.16f);
-		bgRect.anchorMax = new Vector2(0.42f, 0.4f);
-		bgRect.offsetMin = new Vector2(24f, 0f);
+		bgRect.anchorMin = new Vector2(0f, 0.24f);
+		bgRect.anchorMax = new Vector2(0.4f, 0.76f);
+		bgRect.offsetMin = new Vector2(20f, 0f);
 		bgRect.offsetMax = new Vector2(-8f, 0f);
 
-		var gaugeFill = UiFactory.CreateImage("ExpGaugeFill", gaugeBg.transform, new Color(0.45f, 0.85f, 0.5f, 1f));
+		var gaugeFill = UiFactory.CreateImage("ExpGaugeFill", gaugeBg.transform, new Color(0.35f, 0.72f, 0.9f, 1f));
 		var fillImage = gaugeFill.GetComponent<Image>();
 		fillImage.sprite = null;
 		fillImage.type = Image.Type.Simple;
@@ -180,27 +176,28 @@ public class MainUi : MonoBehaviour
 		m_ExpFillRect.offsetMin = new Vector2(0f, 0f);
 		m_ExpFillRect.offsetMax = new Vector2(0f, 0f);
 
-		// 활동력 + 회복 타이머 (0.42 ~ 0.72)
-		m_ActivityText = MakeHudText(topHud, "ActivityText", 0.42f, 0.72f, 0f, 0f, 26, new Color(0.6f, 0.85f, 1f, 1f), TextAnchor.LowerCenter);
+		m_LevelText = UiFactory.CreateText("LevelText", gaugeBg.transform, null, "", 24, Color.white, TextAnchor.MiddleCenter);
+		m_LevelText.raycastTarget = false;
+		var levelRect = m_LevelText.rectTransform;
+		levelRect.anchorMin = new Vector2(0f, 0f);
+		levelRect.anchorMax = new Vector2(1f, 1f);
+		levelRect.offsetMin = new Vector2(0f, 0f);
+		levelRect.offsetMax = new Vector2(0f, 0f);
+
+		// 활동력(위 절반) + 회복 타이머(아래 절반) — 겹치지 않게 분리
+		m_ActivityText = MakeHudText(topHud, "ActivityText", 0.4f, 0.62f, 0f, 0f, 24, new Color(0.6f, 0.85f, 1f, 1f), TextAnchor.LowerCenter);
 		var actRect = m_ActivityText.rectTransform;
-		actRect.anchorMin = new Vector2(0.42f, 0.42f);
-		actRect.anchorMax = new Vector2(0.72f, 1f);
+		actRect.anchorMin = new Vector2(0.4f, 0.5f);
+		actRect.anchorMax = new Vector2(0.62f, 1f);
 
-		m_ActivityTimerText = MakeHudText(topHud, "ActivityTimer", 0.42f, 0.72f, 0f, 0f, 20, new Color(0.5f, 0.62f, 0.74f, 1f), TextAnchor.UpperCenter);
+		m_ActivityTimerText = MakeHudText(topHud, "ActivityTimer", 0.4f, 0.62f, 0f, 0f, 17, new Color(0.5f, 0.62f, 0.74f, 1f), TextAnchor.UpperCenter);
 		var timerRect = m_ActivityTimerText.rectTransform;
-		timerRect.anchorMin = new Vector2(0.42f, 0f);
-		timerRect.anchorMax = new Vector2(0.72f, 0.46f);
+		timerRect.anchorMin = new Vector2(0.4f, 0f);
+		timerRect.anchorMax = new Vector2(0.62f, 0.5f);
 
-		// 크레딧 + 금속 (0.72 ~ 1, 세로 2줄)
-		m_CurrencyText = MakeHudText(topHud, "CurrencyText", 0.72f, 1f, 0f, -24f, 24, new Color(1f, 0.85f, 0.4f, 1f), TextAnchor.LowerRight);
-		var currencyRect = m_CurrencyText.rectTransform;
-		currencyRect.anchorMin = new Vector2(0.72f, 0.5f);
-		currencyRect.anchorMax = new Vector2(1f, 1f);
-
-		m_MetalText = MakeHudText(topHud, "MetalText", 0.72f, 1f, 0f, -24f, 24, new Color(0.72f, 0.79f, 0.86f, 1f), TextAnchor.UpperRight);
-		var metalRect = m_MetalText.rectTransform;
-		metalRect.anchorMin = new Vector2(0.72f, 0f);
-		metalRect.anchorMax = new Vector2(1f, 0.5f);
+		// 금속(좌) + 크레딧(우) 가로 배치 (0.62 ~ 1)
+		m_MetalText = MakeHudText(topHud, "MetalText", 0.62f, 0.8f, 8f, 0f, 26, new Color(0.72f, 0.79f, 0.86f, 1f), TextAnchor.MiddleRight);
+		m_CurrencyText = MakeHudText(topHud, "CurrencyText", 0.8f, 1f, 0f, -24f, 26, new Color(1f, 0.85f, 0.4f, 1f), TextAnchor.MiddleRight);
 	}
 
 	/// <summary>
@@ -347,7 +344,7 @@ public class MainUi : MonoBehaviour
 
 		if (m_TopIcons != null)
 		{
-			m_TopIcons.SetActive(s_ScreenNames[activeIndex] == "전투");
+			m_TopIcons.SetActive(s_ScreenNames[activeIndex] == "모험");
 		}
 
 		ResetActiveScreen(activeIndex);
@@ -392,6 +389,47 @@ public class MainUi : MonoBehaviour
 
 		m_ResearchPanel = CreateSubPanel(deckScreen, "Sub_연구", "연구");
 		m_CrewPanel = CreateSubPanel(deckScreen, "Sub_승무원", "승무원");
+
+		// 자동 발사 미리보기 토글(데크 우상단, 서브탭바 아래)
+		var autoButton = UiFactory.CreateImage("AutoPreviewToggle", deckScreen, new Color(0.2f, 0.42f, 0.48f, 1f));
+		var autoRect = (RectTransform)autoButton.transform;
+		autoRect.anchorMin = new Vector2(1f, 1f);
+		autoRect.anchorMax = new Vector2(1f, 1f);
+		autoRect.pivot = new Vector2(1f, 1f);
+		autoRect.sizeDelta = new Vector2(240f, 64f);
+		autoRect.anchoredPosition = new Vector2(-16f, -96f);
+		autoButton.AddComponent<Button>().onClick.AddListener(ToggleAutoPreview);
+		m_AutoPreviewLabel = UiFactory.CreateText("Label", autoButton.transform, null, "", 26, Color.white, TextAnchor.MiddleCenter);
+		m_AutoPreviewLabel.raycastTarget = false;
+		RefreshAutoPreviewLabel();
+	}
+
+	/// <summary>
+	/// 자동 발사 미리보기를 켜고 끈다.
+	/// </summary>
+	private void ToggleAutoPreview()
+	{
+		if (m_PlayerState == null)
+		{
+			return;
+		}
+
+		m_PlayerState.SetAutoPreview(!m_PlayerState.AutoPreview);
+		RefreshAutoPreviewLabel();
+	}
+
+	/// <summary>
+	/// 자동 발사 토글 라벨을 갱신한다.
+	/// </summary>
+	private void RefreshAutoPreviewLabel()
+	{
+		if (m_AutoPreviewLabel == null)
+		{
+			return;
+		}
+
+		var on = m_PlayerState != null && m_PlayerState.AutoPreview;
+		m_AutoPreviewLabel.text = "자동발사 " + (on ? "ON" : "OFF");
 	}
 
 	/// <summary>
@@ -481,7 +519,7 @@ public class MainUi : MonoBehaviour
 				m_Shop.ResetView();
 			}
 		}
-		else if (screenName == "전투")
+		else if (screenName == "모험")
 		{
 			if (m_Battle != null)
 			{
@@ -508,8 +546,7 @@ public class MainUi : MonoBehaviour
 		m_ExpFillRect.anchorMax = new Vector2(Mathf.Clamp01(ratio), 1f);
 
 		var activity = m_PlayerState.Activity;
-		var maxActivity = m_PlayerState.MaxActivity;
-		m_ActivityText.text = "활동력 " + activity + " / " + maxActivity;
+		m_ActivityText.text = "활동력 " + activity;
 
 		var currency = m_PlayerState.Currency;
 		m_CurrencyText.text = "크레딧 " + currency;

@@ -1,18 +1,17 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.TextCore.LowLevel;
 
 
 /// <summary>
-/// TextMeshPro 공용 폰트. 프로젝트에 포함된 한글 ttf로 동적 SDF 폰트 에셋을 만든다.
-/// (글리프를 런타임에 추가하므로 한글 전체를 미리 굽지 않아도 되고 WebGL에서도 동작)
+/// TextMeshPro 공용 폰트. 게임 문자를 미리 구운 정적 SDF 폰트 에셋(Resources)을 로드한다.
+/// 런타임에 폰트를 생성하지 않으므로 플레이 모드/빌드에서 글리프가 사라지지 않는다.
 /// </summary>
 public static class TmpFont
 {
 	private static TMP_FontAsset s_Default;
 
 	/// <summary>
-	/// 기본 TMP 폰트(한글 지원, 동적 SDF).
+	/// 기본 TMP 폰트(경기천년바탕 Regular, 정적 SDF).
 	/// </summary>
 	public static TMP_FontAsset Default
 	{
@@ -20,8 +19,7 @@ public static class TmpFont
 		{
 			if (s_Default == null)
 			{
-				var sourceFont = Resources.Load<Font>("Fonts/malgun");
-				s_Default = TMP_FontAsset.CreateFontAsset(sourceFont, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024, AtlasPopulationMode.Dynamic, true);
+				s_Default = Resources.Load<TMP_FontAsset>("Fonts/GyeonggiBatang-SDF");
 			}
 
 			return s_Default;

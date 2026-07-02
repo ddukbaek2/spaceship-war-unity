@@ -20,11 +20,12 @@
       align-items: flex-start;
       justify-content: center;
     }
-    /* 9:16(1080x1920) 비율을 유지하며 화면 안에 전체가 보이도록 맞춘다(레터박스).
-       가로를 100%로 늘리지 않고, 내부 렌더 해상도만 devicePixelRatio로 올려 선명하게. */
+    /* 세로는 실제 보이는 뷰포트 높이(--vh, JS로 window.innerHeight 기반 계산)를 채운다.
+       모바일 사파리/크롬의 100vh(주소창 포함) 문제로 아래가 잘리는 것을 막는다.
+       가로는 9:16 기준 폭을 유지하되 화면보다 넓지 않게 한다. */
     #unity-canvas {
-      width: min(100vw, 56.25vh);
-      height: min(100vh, 177.778vw);
+      width: min(100vw, calc(var(--vh, 1vh) * 56.25));
+      height: calc(var(--vh, 1vh) * 100);
       background: #0a0a12;
       display: block;
     }
@@ -61,6 +62,14 @@
     </div>
   </div>
   <script>
+    // 모바일 브라우저에서 실제 보이는 뷰포트 높이를 --vh 로 반영(주소창 표시/숨김 대응).
+    function setViewportHeight() {
+      document.documentElement.style.setProperty("--vh", (window.innerHeight * 0.01) + "px");
+    }
+    setViewportHeight();
+    window.addEventListener("resize", setViewportHeight);
+    window.addEventListener("orientationchange", setViewportHeight);
+
     var buildUrl = "Build";
     var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
     var config = {

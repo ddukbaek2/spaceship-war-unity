@@ -59,6 +59,7 @@ public class PlayerState : MonoBehaviour
 	private int m_SelectedId = -1;
 	private int m_Wins;
 	private bool m_ManualMove;
+	private bool m_AutoPreview = true;
 	private long m_ActivityTimestampTicks;
 	private bool m_SuppressSave;
 
@@ -93,6 +94,21 @@ public class PlayerState : MonoBehaviour
 
 	/// <summary> 전투 수동 이동 설정 여부. </summary>
 	public bool ManualMove { get { return m_ManualMove; } }
+
+	/// <summary> 개조 화면 자동 발사 미리보기 여부(세션 설정, 기본 on). </summary>
+	public bool AutoPreview { get { return m_AutoPreview; } }
+
+	/// <summary> 자동 발사 미리보기를 켜고 끈다. </summary>
+	public void SetAutoPreview(bool on)
+	{
+		if (m_AutoPreview == on)
+		{
+			return;
+		}
+
+		m_AutoPreview = on;
+		RaiseChanged();
+	}
 
 	/// <summary> 활동력 1 회복까지 남은 시간(초). 가득이면 0. </summary>
 	public float SecondsToNextRecovery
@@ -514,6 +530,7 @@ public class PlayerState : MonoBehaviour
 		{
 			m_Experience -= m_Level;
 			m_Level += 1;
+			NotificationLog.Add("레벨 " + m_Level + " 달성!");
 		}
 
 		Save();

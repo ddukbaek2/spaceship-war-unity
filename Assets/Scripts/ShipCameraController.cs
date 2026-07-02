@@ -31,9 +31,14 @@ public class ShipCameraController : MonoBehaviour
 	private Vector2 m_PreviousPointer;
 
 	/// <summary>
-	/// 드래그 진행 여부.
+	/// 현재 누름이 진행 중인지 여부.
 	/// </summary>
-	private bool m_Dragging;
+	private bool m_PressActive;
+
+	/// <summary>
+	/// 현재 누름을 무시하는지 여부(UI 위에서 시작한 누름).
+	/// </summary>
+	private bool m_IgnorePress;
 
 	/// <summary>
 	/// 대상에서 카메라로 향하는 정규화된 방향.
@@ -119,15 +124,21 @@ public class ShipCameraController : MonoBehaviour
 		var isPressed = pointer.press.isPressed;
 		var position = pointer.position.ReadValue();
 
-		if (isPressed && !m_Dragging && !IsOverUi())
+		if (isPressed && !m_PressActive)
 		{
-			m_Dragging = true;
+			m_PressActive = true;
+			m_IgnorePress = IsOverUi();
 			m_PreviousPointer = position;
 			return false;
 		}
 
-		if (isPressed && m_Dragging)
+		if (isPressed && m_PressActive)
 		{
+			if (m_IgnorePress)
+			{
+				return false;
+			}
+
 			var delta = position - m_PreviousPointer;
 			m_PreviousPointer = position;
 			var move = (-transform.right * delta.x - transform.up * delta.y) * m_PanSpeed;
@@ -140,7 +151,8 @@ public class ShipCameraController : MonoBehaviour
 
 		if (!isPressed)
 		{
-			m_Dragging = false;
+			m_PressActive = false;
+			m_IgnorePress = false;
 		}
 
 		return false;

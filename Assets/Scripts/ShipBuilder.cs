@@ -51,6 +51,7 @@ public class ShipBuilder : MonoBehaviour
 	private Vector3 m_BasePosition;
 	private Camera m_Camera;
 	private PlayerState m_PlayerState;
+	private float m_PreviewCooldown;
 
 	/// <summary>
 	/// 초기화됨.
@@ -94,6 +95,55 @@ public class ShipBuilder : MonoBehaviour
 
 		HandlePointer();
 		PulseEffects();
+		PreviewEffects();
+	}
+
+	/// <summary>
+	/// 자동 발사 미리보기(설정 on): 무기는 전방으로, 추진체는 후방으로 주기적으로 발사 이펙트를 낸다.
+	/// </summary>
+	private void PreviewEffects()
+	{
+		if (m_PlayerState == null || !m_PlayerState.AutoPreview)
+		{
+			return;
+		}
+
+		m_PreviewCooldown -= Time.deltaTime;
+		if (m_PreviewCooldown > 0f)
+		{
+			return;
+		}
+
+		m_PreviewCooldown = 0.7f;
+		var equipped = m_PlayerState.GetEquipped();
+		for (int index = 0; index < equipped.Count; index++)
+		{
+			var placement = equipped[index];
+			var category = ModuleCatalog.GetCategory(placement.Type);
+			var color = ModuleCatalog.Get(placement.Type).Color;
+			var localPosition = ToLocal(placement.Coordinate);
+			if (category == ModuleCategory.Weapon)
+			{
+				var start = transform.TransformPoint(localPosition) + transform.forward * 0.4f;
+				SpawnPreviewShot(start, transform.forward, 0.12f, color);
+			}
+			else if (category == ModuleCategory.Engine)
+			{
+				var start = transform.TransformPoint(localPosition) - transform.forward * 0.4f;
+				SpawnPreviewShot(start, -transform.forward, 0.1f, color);
+			}
+		}
+	}
+
+	/// <summary>
+	/// 미리보기 발사체를 하나 생성한다.
+	/// </summary>
+	private void SpawnPreviewShot(Vector3 start, Vector3 direction, float size, Color color)
+	{
+		var shotObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+		shotObject.name = "PreviewShot";
+		var preview = shotObject.AddComponent<PreviewShot>();
+		preview.Launch(start, direction, size, color);
 	}
 
 	/// <summary>

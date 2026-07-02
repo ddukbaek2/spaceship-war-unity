@@ -211,6 +211,8 @@ public class ShopController : MonoBehaviour
 		if (m_PlayerState.TrySpendCurrency(price))
 		{
 			m_PlayerState.AddModule(type);
+			var definition = ModuleCatalog.Get(type);
+			NotificationLog.Add(definition.DisplayName + " 모듈을 구매했습니다. (크레딧 -" + price + ")");
 		}
 	}
 }

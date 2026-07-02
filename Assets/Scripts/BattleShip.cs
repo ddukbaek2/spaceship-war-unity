@@ -34,6 +34,7 @@ public class BattleShip : MonoBehaviour
 		public ModuleType Type;
 		public float Health;
 		public float MaxHealth;
+		public float FireCooldown;
 		public RectTransform BarRoot;
 		public RectTransform BarFill;
 	}
@@ -51,15 +52,25 @@ public class BattleShip : MonoBehaviour
 
 	private float m_MoveSpeed = 2.5f;
 	private float m_TurnSpeed = 80f;
+	private float m_Acceleration = 4f;
+	private float m_CurrentSpeed;
+	private float m_Radius = 1.5f;
 	private float m_WeaponRange = 9f;
 	private float m_DetectionRange = 13f;
-	private float m_FireInterval = 0.9f;
-	private float m_FireCooldown;
+	private float m_CoreFireCooldown;
 	private float m_BobPhase;
 
 	private bool m_ManualControl;
 	private Vector2 m_MoveInput;
 	private HashSet<Vector2Int> m_ActiveModules;
+
+	/// <summary>
+	/// 충돌 회피용 함선 반경(모듈 수 기반).
+	/// </summary>
+	public float Radius
+	{
+		get { return m_Radius; }
+	}
 
 	/// <summary>
 	/// 함선 생존 여부(코어 생존).
@@ -94,7 +105,7 @@ public class BattleShip : MonoBehaviour
 
 		m_ActiveModules = isEnemy ? null : ModuleCatalog.ComputeActive(layout);
 
-		var engineCount = 0;
+		var thrustPower = 0f;
 		if (layout != null)
 		{
 			foreach (var placement in layout)
@@ -110,6 +121,11 @@ public class BattleShip : MonoBehaviour
 				moduleData.Type = placement.Type;
 				moduleData.MaxHealth = Mathf.Max(12f, definition.Health);
 				moduleData.Health = moduleData.MaxHealth;
+				if (ModuleCatalog.GetCategory(placement.Type) == ModuleCategory.Weapon)
+				{
+					moduleData.FireCooldown = Random.Range(0f, GetWeaponFireInterval(placement.Type));
+				}
+
 				CreateBar(out moduleData.BarRoot, out moduleData.BarFill, new Color(1f, 0.7f, 0.4f, 1f));
 				m_Modules[placement.Coordinate] = moduleData;
 
@@ -120,13 +136,19 @@ public class BattleShip : MonoBehaviour
 
 				if (ModuleCatalog.GetCategory(placement.Type) == ModuleCategory.Engine && IsModuleActive(placement.Coordinate))
 				{
-					engineCount++;
+					thrustPower += definition.Speed;
 				}
 			}
 		}
 
-		m_MoveSpeed = 2.2f + engineCount * 0.7f;
-		m_TurnSpeed = 70f + engineCount * 45f;
+		// 추진력 대비 무게(모듈 수)로 이동 성능을 정한다.
+		// 추진이 부족하면 최고속도·가속(제로백)이 낮고, 충분하면 평범한 속도로 빠르게 도달한다.
+		var weight = m_Modules.Count + 1;
+		var thrustRatio = thrustPower / (weight * 2.2f);
+		m_MoveSpeed = Mathf.Clamp(1.0f + thrustRatio * 2.0f, 0.7f, 3.6f);
+		m_Acceleration = Mathf.Clamp(1.2f + thrustRatio * 4.5f, 1.2f, 8f);
+		m_TurnSpeed = Mathf.Clamp(35f + thrustRatio * 75f, 30f, 150f);
+		m_Radius = 0.9f + Mathf.Sqrt(m_Modules.Count) * 0.32f;
 	}
 
 	/// <summary>
@@ -180,14 +202,11 @@ public class BattleShip : MonoBehaviour
 				MoveAndFace(toOpponent, distance);
 			}
 
+			AvoidOverlap();
+
 			if (distance <= m_DetectionRange)
 			{
-				m_FireCooldown -= Time.deltaTime;
-				if (m_FireCooldown <= 0f)
-				{
-					Fire();
-					m_FireCooldown = m_FireInterval;
-				}
+				FireWeapons();
 			}
 		}
 
@@ -207,18 +226,20 @@ public class BattleShip : MonoBehaviour
 		}
 
 		var holdDistance = m_WeaponRange * 0.7f;
-		var thrust = 0f;
+		var targetSpeed = 0f;
 		if (distance > holdDistance + 0.5f)
 		{
-			thrust = m_MoveSpeed;
+			targetSpeed = m_MoveSpeed;
 		}
 		else if (distance < holdDistance - 0.5f)
 		{
-			thrust = -m_MoveSpeed * 0.5f;
+			targetSpeed = -m_MoveSpeed * 0.5f;
 		}
 
+		m_CurrentSpeed = Mathf.MoveTowards(m_CurrentSpeed, targetSpeed, m_Acceleration * Time.deltaTime);
+
 		var bob = Mathf.Sin(Time.time * 1.4f + m_BobPhase) * 0.12f;
-		var position = transform.position + transform.forward * thrust * Time.deltaTime;
+		var position = transform.position + transform.forward * m_CurrentSpeed * Time.deltaTime;
 		position.y = bob;
 		transform.position = position;
 	}
@@ -237,8 +258,11 @@ public class BattleShip : MonoBehaviour
 			transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, m_TurnSpeed * Time.deltaTime);
 		}
 
+		var targetSpeed = m_MoveSpeed * magnitude;
+		m_CurrentSpeed = Mathf.MoveTowards(m_CurrentSpeed, targetSpeed, m_Acceleration * Time.deltaTime);
+
 		var bob = Mathf.Sin(Time.time * 1.4f + m_BobPhase) * 0.12f;
-		var position = transform.position + transform.forward * m_MoveSpeed * magnitude * Time.deltaTime;
+		var position = transform.position + transform.forward * m_CurrentSpeed * Time.deltaTime;
 		position.y = bob;
 		transform.position = position;
 	}
@@ -246,12 +270,13 @@ public class BattleShip : MonoBehaviour
 	/// <summary>
 	/// 무기 모듈에서 전방(빈 공간)으로 빔을 발사한다. 무기가 없으면 코어가 약하게 사격한다.
 	/// </summary>
-	private void Fire()
+	private void FireWeapons()
 	{
-		var fired = false;
+		var hasWeapon = false;
 		foreach (var moduleCell in m_Modules)
 		{
-			if (ModuleCatalog.GetCategory(moduleCell.Value.Type) != ModuleCategory.Weapon || moduleCell.Value.Object == null)
+			var data = moduleCell.Value;
+			if (ModuleCatalog.GetCategory(data.Type) != ModuleCategory.Weapon || data.Object == null)
 			{
 				continue;
 			}
@@ -261,27 +286,111 @@ public class BattleShip : MonoBehaviour
 				continue;
 			}
 
-			var definition = ModuleCatalog.Get(moduleCell.Value.Type);
-			var muzzle = moduleCell.Value.Object.transform.position + transform.forward * (CellSize * 0.6f);
-			SpawnProjectile(muzzle, transform.forward, definition.Attack, 0.26f, new Color(1f, 0.5f, 0.4f, 1f));
-			fired = true;
+			hasWeapon = true;
+			data.FireCooldown -= Time.deltaTime;
+			if (data.FireCooldown > 0f)
+			{
+				continue;
+			}
+
+			data.FireCooldown = GetWeaponFireInterval(data.Type);
+			var definition = ModuleCatalog.Get(data.Type);
+			var style = GetWeaponStyle(data.Type);
+			var muzzle = data.Object.transform.position + transform.forward * (CellSize * 0.6f);
+			SpawnProjectile(muzzle, transform.forward, definition.Attack, style, definition.Color);
 		}
 
-		if (!fired && m_CoreObject != null)
+		if (!hasWeapon && m_CoreObject != null)
 		{
-			var muzzle = m_CoreObject.transform.position + transform.forward * (CellSize * 0.6f);
-			SpawnProjectile(muzzle, transform.forward, 1f, 0.07f, new Color(0.5f, 0.9f, 1f, 1f));
+			m_CoreFireCooldown -= Time.deltaTime;
+			if (m_CoreFireCooldown <= 0f)
+			{
+				m_CoreFireCooldown = 1.2f;
+				var muzzle = m_CoreObject.transform.position + transform.forward * (CellSize * 0.6f);
+				SpawnProjectile(muzzle, transform.forward, 1f, 0, new Color(0.5f, 0.9f, 1f, 1f));
+			}
+		}
+	}
+
+	/// <summary>
+	/// 무기 종류별 발사 주기(초). 기관포=빠름, 레이저=중간, 캐논=느림.
+	/// </summary>
+	private static float GetWeaponFireInterval(ModuleType type)
+	{
+		switch (type)
+		{
+			case ModuleType.WeaponMachineGun:
+			{
+				return 0.45f;
+			}
+			case ModuleType.WeaponLaser:
+			{
+				return 0.95f;
+			}
+			case ModuleType.WeaponCannon:
+			{
+				return 1.7f;
+			}
+			default:
+			{
+				return 0.9f;
+			}
+		}
+	}
+
+	/// <summary>
+	/// 상대 함선과 겹치면(관통) 최소 거리만큼 밀어내 관통을 막는다.
+	/// </summary>
+	private void AvoidOverlap()
+	{
+		if (m_Opponent == null)
+		{
+			return;
+		}
+
+		var toOpponent = m_Opponent.transform.position - transform.position;
+		toOpponent.y = 0f;
+		var distance = toOpponent.magnitude;
+		var minDistance = m_Radius + m_Opponent.Radius;
+		if (distance > 0.01f && distance < minDistance)
+		{
+			var push = toOpponent.normalized * ((minDistance - distance) * 0.5f);
+			var position = transform.position - push;
+			position.y = transform.position.y;
+			transform.position = position;
 		}
 	}
 
 	/// <summary>
 	/// 빔 투사체를 생성한다.
 	/// </summary>
-	private void SpawnProjectile(Vector3 start, Vector3 direction, float damage, float thickness, Color color)
+	private void SpawnProjectile(Vector3 start, Vector3 direction, float damage, int style, Color color)
 	{
-		var projectileObject = new GameObject("Laser");
+		var projectileObject = new GameObject("Shot");
 		var projectile = projectileObject.AddComponent<BattleProjectile>();
-		projectile.Launch(start, direction, m_Opponent, damage, 16f, thickness, color);
+		projectile.Launch(start, direction, m_Opponent, damage, style, color);
+	}
+
+	/// <summary>
+	/// 무기 종류별 발사체 스타일(0=총알, 1=레이저 빔, 2=에너지구).
+	/// </summary>
+	private static int GetWeaponStyle(ModuleType type)
+	{
+		switch (type)
+		{
+			case ModuleType.WeaponLaser:
+			{
+				return 1;
+			}
+			case ModuleType.WeaponCannon:
+			{
+				return 2;
+			}
+			default:
+			{
+				return 0;
+			}
+		}
 	}
 
 	/// <summary>

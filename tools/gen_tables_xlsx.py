@@ -58,7 +58,7 @@ def build_stages():
     sheet.append(["Index", "EnemyName", "ModuleCount", "MaxTier", "Seed"])
     for index in range(STAGE_COUNT):
         enemy_name = ENEMY_NAMES[index % len(ENEMY_NAMES)]
-        module_count = min(1 + index, 8)
+        module_count = min(10 + index * 12, 120)
         max_tier = min(index // 3, STAGE_TIER_COUNT - 1)
         seed = 7919 + index * 131
         sheet.append([index, enemy_name, module_count, max_tier, seed])

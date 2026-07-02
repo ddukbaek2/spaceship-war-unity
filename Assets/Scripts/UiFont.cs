@@ -18,7 +18,7 @@ public static class UiFont
 		{
 			if (s_Default == null)
 			{
-				s_Default = Resources.Load<Font>("Fonts/malgun");
+				s_Default = Resources.Load<Font>("Fonts/NotoSansKR-Regular");
 			}
 
 			return s_Default;

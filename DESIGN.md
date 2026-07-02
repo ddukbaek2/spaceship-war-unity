@@ -204,6 +204,14 @@ UI
   - **모듈 외곽선 URP 셰이더 `Spaceship/ModuleLit`**: 2-pass(인버티드 헐 외곽선 + 간이 URP 람베르트 라이팅). `_BaseColor`/`_EmissionColor`/`_OutlineColor`/`_OutlineWidth`. Resources/Modules의 모든 모듈 머티리얼(31개)을 이 셰이더로 교체(색 보존), Always Included 등록. `ModuleFactory`의 런타임 인버티드 헐(AddOutline) 제거 — 외곽선은 셰이더가 담당. (빌드 용량 79→68MB 감소.)
   - 재빌드·NAS 재배포.
 
+- 2026-07-01
+  - **스카이박스 셰이더 스트리핑 버그 수정**: 모듈 URP Lit 사용 급감 후 WebGL 빌드에서 `Skybox/Cubemap` 셰이더가 스트리핑되어 스카이박스가 안 보이던 문제 → `Skybox/Cubemap`을 Always Included에 등록(런타임에만 `RenderSettings.skybox` 설정하므로 빌드가 미사용으로 판단했던 것). 에디터 플레이 모드 진단으로 카메라 ClearFlags/skybox는 정상임을 확인.
+  - **폰트 노토산스 전환**: `NotoSansKR-Regular.ttf`를 `Resources/Fonts/`로 포함, `TmpFont`/`UiFont` 경로를 노토산스로 변경(malgun 대체).
+  - **전투 코어 색 통일**: 아군/적 코어 색을 동일(청록)하게 — 위치로 구분, 색 혼동 제거.
+  - **데크 카메라 팬 ↔ 스크롤 분리**: `ShipCameraController`가 누름 시작 시 UI 위 여부를 판정해 그 드래그 동안 카메라 패닝을 무시(인벤토리 스크롤과 충돌 해소).
+  - **인벤토리 정리**: 우측 스크롤바 제거, 아이템 그리드 가운데 정렬(좌측 치중 해소).
+  - 재빌드·NAS 재배포.
+
 ## 7. 게임 루프 로드맵 (목표 설계)
 
 사용자 의도에 따른 전체 흐름. 단계별로 구현한다.

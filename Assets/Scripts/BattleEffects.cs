@@ -14,30 +14,43 @@ public class BattleProjectile : MonoBehaviour
 	private float m_Life;
 
 	/// <summary>
-	/// 레이저 투사체를 발사한다(세장형 빛나는 코어 + 트레일 + 파티클 스파크).
+	/// 무기 스타일별 투사체를 발사한다(0=총알, 1=레이저 빔, 2=에너지구).
 	/// </summary>
-	public void Launch(Vector3 start, Vector3 direction, BattleShip targetShip, float damage, float speed, float thickness, Color color)
+	public void Launch(Vector3 start, Vector3 direction, BattleShip targetShip, float damage, int style, Color color)
 	{
 		m_TargetShip = targetShip;
 		m_Direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
 		m_Damage = damage;
-		m_Speed = speed;
 		m_Life = 2.5f;
+
+		if (style == 2)
+		{
+			m_Speed = 12f;
+		}
+		else if (style == 1)
+		{
+			m_Speed = 26f;
+		}
+		else
+		{
+			m_Speed = 20f;
+		}
 
 		transform.position = start;
 		transform.rotation = Quaternion.LookRotation(m_Direction, Vector3.up);
 
-		BuildCore(thickness, color);
-		BuildTrail(thickness, color);
-		BuildSparks(thickness, color);
+		BuildCore(style, color);
+		BuildTrail(style, color);
+		BuildSparks(style, color);
 	}
 
 	/// <summary>
-	/// 레이저 코어(세장형 빛나는 큐브)를 만든다.
+	/// 스타일별 코어를 만든다(총알=작은 큐브, 빔=길쭉한 큐브, 에너지구=둥근 구).
 	/// </summary>
-	private void BuildCore(float thickness, Color color)
+	private void BuildCore(int style, Color color)
 	{
-		var core = GameObject.CreatePrimitive(PrimitiveType.Cube);
+		var primitive = style == 2 ? PrimitiveType.Sphere : PrimitiveType.Cube;
+		var core = GameObject.CreatePrimitive(primitive);
 		core.name = "Core";
 		var collider = core.GetComponent<Collider>();
 		if (collider != null)
@@ -47,19 +60,56 @@ public class BattleProjectile : MonoBehaviour
 
 		core.transform.SetParent(transform, false);
 		core.transform.localPosition = Vector3.zero;
-		core.transform.localScale = new Vector3(thickness, thickness, 1.8f);
-		var emission = color * 6f;
+
+		Vector3 scale;
+		float emissionMul;
+		if (style == 1)
+		{
+			scale = new Vector3(0.11f, 0.11f, 2.4f);
+			emissionMul = 6f;
+		}
+		else if (style == 2)
+		{
+			scale = new Vector3(0.55f, 0.55f, 0.55f);
+			emissionMul = 4f;
+		}
+		else
+		{
+			scale = new Vector3(0.17f, 0.17f, 0.42f);
+			emissionMul = 6f;
+		}
+
+		core.transform.localScale = scale;
+		var emission = color * emissionMul;
 		core.GetComponent<Renderer>().material = MaterialFactory.CreateLit(color, emission, 0f, 0.6f, false);
 	}
 
 	/// <summary>
-	/// 레이저 잔상 트레일을 만든다.
+	/// 스타일별 잔상 트레일을 만든다.
 	/// </summary>
-	private void BuildTrail(float thickness, Color color)
+	private void BuildTrail(int style, Color color)
 	{
 		var trail = gameObject.AddComponent<TrailRenderer>();
-		trail.time = 0.16f;
-		trail.startWidth = thickness * 1.7f;
+		float width;
+		float time;
+		if (style == 1)
+		{
+			width = 0.18f;
+			time = 0.16f;
+		}
+		else if (style == 2)
+		{
+			width = 0.55f;
+			time = 0.12f;
+		}
+		else
+		{
+			width = 0.14f;
+			time = 0.1f;
+		}
+
+		trail.time = time;
+		trail.startWidth = width;
 		trail.endWidth = 0f;
 		trail.numCapVertices = 4;
 		trail.minVertexDistance = 0.05f;
@@ -73,9 +123,9 @@ public class BattleProjectile : MonoBehaviour
 	}
 
 	/// <summary>
-	/// 궤적을 따라 흩어지는 파티클 스파크를 만든다.
+	/// 궤적을 따라 흩어지는 파티클 스파크를 만든다(에너지구는 더 크고 짙게).
 	/// </summary>
-	private void BuildSparks(float thickness, Color color)
+	private void BuildSparks(int style, Color color)
 	{
 		var sparkObject = new GameObject("Spark");
 		sparkObject.transform.SetParent(transform, false);
@@ -85,17 +135,17 @@ public class BattleProjectile : MonoBehaviour
 		var main = particle.main;
 		main.startLifetime = 0.28f;
 		main.startSpeed = 0.4f;
-		main.startSize = thickness * 1.3f;
+		main.startSize = style == 2 ? 0.55f : 0.2f;
 		main.startColor = color;
 		main.simulationSpace = ParticleSystemSimulationSpace.World;
-		main.maxParticles = 80;
+		main.maxParticles = 90;
 
 		var emission = particle.emission;
-		emission.rateOverTime = 70f;
+		emission.rateOverTime = style == 2 ? 100f : 60f;
 
 		var shape = particle.shape;
 		shape.shapeType = ParticleSystemShapeType.Sphere;
-		shape.radius = thickness * 0.5f;
+		shape.radius = style == 2 ? 0.3f : 0.1f;
 
 		var particleRenderer = sparkObject.GetComponent<ParticleSystemRenderer>();
 		particleRenderer.material = MaterialFactory.CreateLit(color, color * 5f, 0f, 0.5f, false);
@@ -208,5 +258,50 @@ public class BattleThruster : MonoBehaviour
 	{
 		var pulse = 0.6f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * 14f + m_Phase));
 		transform.localScale = new Vector3(m_BaseScale.x, m_BaseScale.y, m_BaseScale.z * pulse);
+	}
+}
+
+
+/// <summary>
+/// 개조 화면 자동 발사 미리보기용 간단 발사체. 지정 방향으로 잠시 날아가다 사라진다.
+/// </summary>
+public class PreviewShot : MonoBehaviour
+{
+	private Vector3 m_Direction;
+	private float m_Life = 1.1f;
+	private float m_Speed = 14f;
+
+	/// <summary>
+	/// 발사한다.
+	/// </summary>
+	public void Launch(Vector3 start, Vector3 direction, float size, Color color)
+	{
+		transform.position = start;
+		transform.localScale = new Vector3(size, size, size * 3f);
+		m_Direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
+		transform.rotation = Quaternion.LookRotation(m_Direction, Vector3.up);
+
+		var collider = GetComponent<Collider>();
+		if (collider != null)
+		{
+			Destroy(collider);
+		}
+
+		GetComponent<Renderer>().material = MaterialFactory.CreateLit(color, color * 5f, 0f, 0.6f, false);
+	}
+
+	/// <summary>
+	/// 매 프레임 전진하고 수명이 끝나면 사라진다.
+	/// </summary>
+	private void Update()
+	{
+		m_Life -= Time.deltaTime;
+		if (m_Life <= 0f)
+		{
+			Destroy(gameObject);
+			return;
+		}
+
+		transform.position += m_Direction * m_Speed * Time.deltaTime;
 	}
 }

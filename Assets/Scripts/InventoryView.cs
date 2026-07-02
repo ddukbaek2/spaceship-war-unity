@@ -114,7 +114,7 @@ public class InventoryView : MonoBehaviour
 		viewportRect.anchorMin = new Vector2(0f, 0f);
 		viewportRect.anchorMax = new Vector2(1f, 1f);
 		viewportRect.offsetMin = new Vector2(0f, 0f);
-		viewportRect.offsetMax = new Vector2(-22f, 0f);
+		viewportRect.offsetMax = new Vector2(0f, 0f);
 		viewport.AddComponent<RectMask2D>();
 
 		var contentObject = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
@@ -122,8 +122,8 @@ public class InventoryView : MonoBehaviour
 		contentObject.transform.SetParent(viewportRect, false);
 		m_Content = (RectTransform)contentObject.transform;
 		m_Content.anchorMin = new Vector2(0f, 1f);
-		m_Content.anchorMax = new Vector2(0f, 1f);
-		m_Content.pivot = new Vector2(0f, 1f);
+		m_Content.anchorMax = new Vector2(1f, 1f);
+		m_Content.pivot = new Vector2(0.5f, 1f);
 		m_Content.anchoredPosition = new Vector2(0f, 0f);
 
 		var grid = contentObject.GetComponent<GridLayoutGroup>();
@@ -132,13 +132,11 @@ public class InventoryView : MonoBehaviour
 		grid.padding = new RectOffset(8, 8, 8, 8);
 		grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		grid.constraintCount = 8;
-		grid.childAlignment = TextAnchor.UpperLeft;
+		grid.childAlignment = TextAnchor.UpperCenter;
 
 		var sizeFitter = contentObject.GetComponent<ContentSizeFitter>();
 		sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-		sizeFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-		var scrollbar = CreateScrollbar(scrollViewRect);
+		sizeFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 
 		m_ScrollRect = scrollViewObject.GetComponent<ScrollRect>();
 		m_ScrollRect.content = m_Content;
@@ -147,8 +145,6 @@ public class InventoryView : MonoBehaviour
 		m_ScrollRect.vertical = true;
 		m_ScrollRect.movementType = ScrollRect.MovementType.Elastic;
 		m_ScrollRect.scrollSensitivity = 30f;
-		m_ScrollRect.verticalScrollbar = scrollbar;
-		m_ScrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
 	}
 
 	/// <summary>
@@ -171,38 +167,6 @@ public class InventoryView : MonoBehaviour
 		{
 			m_ScrollRect.verticalNormalizedPosition = 1f;
 		}
-	}
-
-	/// <summary>
-	/// 세로 스크롤바를 생성한다.
-	/// </summary>
-	private Scrollbar CreateScrollbar(Transform parent)
-	{
-		var scrollbarObject = new GameObject("Scrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
-		scrollbarObject.layer = gameObject.layer;
-		scrollbarObject.transform.SetParent(parent, false);
-		var scrollbarRect = (RectTransform)scrollbarObject.transform;
-		scrollbarRect.anchorMin = new Vector2(1f, 0f);
-		scrollbarRect.anchorMax = new Vector2(1f, 1f);
-		scrollbarRect.pivot = new Vector2(1f, 0.5f);
-		scrollbarRect.sizeDelta = new Vector2(16f, 0f);
-		scrollbarObject.GetComponent<Image>().color = new Color(0.05f, 0.05f, 0.07f, 0.6f);
-
-		var handleObject = new GameObject("Handle", typeof(RectTransform), typeof(Image));
-		handleObject.layer = gameObject.layer;
-		handleObject.transform.SetParent(scrollbarRect, false);
-		var handleRect = (RectTransform)handleObject.transform;
-		handleRect.anchorMin = new Vector2(0f, 0f);
-		handleRect.anchorMax = new Vector2(1f, 1f);
-		handleRect.offsetMin = new Vector2(2f, 2f);
-		handleRect.offsetMax = new Vector2(-2f, -2f);
-		handleObject.GetComponent<Image>().color = new Color(0.4f, 0.45f, 0.55f, 1f);
-
-		var scrollbar = scrollbarObject.GetComponent<Scrollbar>();
-		scrollbar.direction = Scrollbar.Direction.BottomToTop;
-		scrollbar.handleRect = handleRect;
-		scrollbar.targetGraphic = handleObject.GetComponent<Image>();
-		return scrollbar;
 	}
 
 	/// <summary>

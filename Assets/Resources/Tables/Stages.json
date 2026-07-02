@@ -3,56 +3,56 @@
     {
       "Index": 0,
       "EnemyName": "붉은 약탈자",
-      "ModuleCount": 1,
+      "ModuleCount": 10,
       "MaxTier": 0,
       "Seed": 7919
     },
     {
       "Index": 1,
       "EnemyName": "검은 유성",
-      "ModuleCount": 2,
+      "ModuleCount": 22,
       "MaxTier": 0,
       "Seed": 8050
     },
     {
       "Index": 2,
       "EnemyName": "강철 전갈",
-      "ModuleCount": 3,
+      "ModuleCount": 34,
       "MaxTier": 0,
       "Seed": 8181
     },
     {
       "Index": 3,
       "EnemyName": "녹빛 추적자",
-      "ModuleCount": 4,
+      "ModuleCount": 46,
       "MaxTier": 1,
       "Seed": 8312
     },
     {
       "Index": 4,
       "EnemyName": "푸른 망령",
-      "ModuleCount": 5,
+      "ModuleCount": 58,
       "MaxTier": 1,
       "Seed": 8443
     },
     {
       "Index": 5,
       "EnemyName": "황금 독수리",
-      "ModuleCount": 6,
+      "ModuleCount": 70,
       "MaxTier": 1,
       "Seed": 8574
     },
     {
       "Index": 6,
       "EnemyName": "심연의 포식자",
-      "ModuleCount": 7,
+      "ModuleCount": 82,
       "MaxTier": 2,
       "Seed": 8705
     },
     {
       "Index": 7,
       "EnemyName": "은빛 칼날",
-      "ModuleCount": 8,
+      "ModuleCount": 94,
       "MaxTier": 2,
       "Seed": 8836
     }

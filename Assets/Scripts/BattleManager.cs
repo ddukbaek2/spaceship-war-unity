@@ -45,8 +45,9 @@ public class BattleManager : MonoBehaviour
 		SetupEnvironment();
 		BuildHealthHud();
 
-		m_Player = SpawnShip(BattleContext.PlayerLayout, new Color(0.3f, 0.82f, 0.85f, 1f), false, new Vector3(0f, 0f, -4f));
-		m_Enemy = SpawnShip(BattleContext.EnemyLayout, new Color(0.88f, 0.42f, 0.42f, 1f), true, new Vector3(Random.Range(-4f, 4f), 0f, 26f));
+		var coreColor = new Color(0.3f, 0.82f, 0.85f, 1f);
+		m_Player = SpawnShip(BattleContext.PlayerLayout, coreColor, false, new Vector3(0f, 0f, -4f));
+		m_Enemy = SpawnShip(BattleContext.EnemyLayout, coreColor, true, new Vector3(Random.Range(-4f, 4f), 0f, 26f));
 		m_Player.SetOpponent(m_Enemy);
 		m_Enemy.SetOpponent(m_Player);
 
